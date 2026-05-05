@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "react";
 
 // ─── 定数 ───────────────────────────────────────────
 const STORAGE_KEY = "kagemusha_profile_v2";
+const CHAT_KEY = "kagemusha_chat_v1";
+const BOOKINGS_KEY = "kagemusha_bookings_v1";
 
 const DEFAULT_PROFILE = {
   name: "Kenji",
@@ -25,7 +27,6 @@ const DEFAULT_PROFILE = {
 };
 
 const SLOTS_DEMO = ["10:00","10:30","11:00","11:30","14:00","14:30","15:00","19:00","19:30","20:00"];
-const BOOKED_DEMO = ["10:30","14:00","19:30"];
 const QUICK_TOPICS = ["仕事のストレスが辛い","人間関係に悩んでいる","将来が不安","自信が持てない"];
 const STYLE_OPTIONS = [
   { value:"empathy_first", label:"共感優先", desc:"まず気持ちに寄り添い、その後アドバイス" },
@@ -141,14 +142,44 @@ export default function App() {
 //  チャットタブ
 // ══════════════════════════════════════════════════
 function ChatTab({ profile, isLiveNow, initials }) {
-  const [messages, setMessages] = useState([
-    { role:"assistant", content: profile.greeting || "こんにちは。どんな悩みでも話しかけてください。", time:nowTime() }
-  ]);
+  const greetingMsg = () => ({
+    role:"assistant",
+    content: profile.greeting || "こんにちは。どんな悩みでも話しかけてください。",
+    time: nowTime(),
+  });
+  const [messages, setMessages] = useState([greetingMsg()]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const bottomRef = useRef(null);
 
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(CHAT_KEY);
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+      }
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(messages)); } catch {}
+  }, [messages, hydrated]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages, loading]);
+
+  function clearChat() {
+    if (!confirm("会話履歴をリセットしますか？")) return;
+    setMessages([greetingMsg()]);
+  }
+
+  function ngHit(text) {
+    const list = (profile.ngWords || "").split(",").map(s=>s.trim()).filter(Boolean);
+    return list.find(w => text.includes(w));
+  }
 
   async function send(text) {
     const t = text || input.trim();
@@ -157,6 +188,18 @@ function ChatTab({ profile, isLiveNow, initials }) {
     const userMsg = { role:"user", content:t, time:nowTime() };
     const next = [...messages, userMsg];
     setMessages(next);
+
+    const hit = ngHit(t);
+    if (hit) {
+      setMessages(p => [...p, {
+        role:"assistant",
+        content:`大切なお話をしてくれてありがとうございます。\n専門の相談窓口（よりそいホットライン: 0120-279-338 / いのちの電話: 0570-783-556）にも、いつでも気軽に話してみてください。\nここでも引き続きお話を聞きます。`,
+        time:nowTime(),
+        safety:true,
+      }]);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/chat", {
@@ -168,29 +211,49 @@ function ChatTab({ profile, isLiveNow, initials }) {
         }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setMessages(p => [...p, {role:"assistant", content:`応答エラー: ${data.error || "不明なエラー"}`, time:nowTime(), error:true}]);
+        return;
+      }
       const reply = data.content?.[0]?.text || "少し考えさせてください…";
       setMessages(p => [...p, {role:"assistant", content:reply, time:nowTime()}]);
     } catch {
-      setMessages(p => [...p, {role:"assistant", content:"接続が不安定です。もう一度お試しください。", time:nowTime()}]);
+      setMessages(p => [...p, {role:"assistant", content:"接続が不安定です。もう一度お試しください。", time:nowTime(), error:true}]);
     } finally { setLoading(false); }
   }
 
   return (
     <div style={ts.wrap}>
+      {messages.length > 1 && (
+        <div style={ts.toolbar}>
+          <button style={ts.clearBtn} onClick={clearChat} aria-label="会話をリセット">
+            🗑 会話をリセット
+          </button>
+        </div>
+      )}
       <div style={ts.messages}>
-        {messages.map((m,i) => (
+        {messages.map((m,i) => {
+          const bubbleStyle = m.role==="user"
+            ? ts.bubbleUser
+            : m.error
+              ? {...ts.bubbleAI, ...ts.bubbleError}
+              : m.safety
+                ? {...ts.bubbleAI, ...ts.bubbleSafety}
+                : ts.bubbleAI;
+          return (
           <div key={i} style={{...ts.row, flexDirection:m.role==="user"?"row-reverse":"row", animation:"fadeInUp 0.3s ease"}}>
             {m.role==="assistant" && (
               <div style={{...ts.msgAvatar, background:`linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})`}}>{initials}</div>
             )}
             <div>
-              <div style={{...ts.bubble, ...(m.role==="user"?ts.bubbleUser:ts.bubbleAI)}}>
+              <div style={{...ts.bubble, ...bubbleStyle}}>
                 {m.content.split("\n").map((l,j)=><span key={j}>{l}{j<m.content.split("\n").length-1&&<br/>}</span>)}
               </div>
               <div style={{...ts.time, textAlign:m.role==="user"?"right":"left"}}>{m.time}</div>
             </div>
           </div>
-        ))}
+          );
+        })}
         {loading && (
           <div style={{...ts.row}}>
             <div style={{...ts.msgAvatar, background:`linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})`}}>{initials}</div>
@@ -239,11 +302,40 @@ function BookingTab() {
   const [slot,setSlot]   = useState(null);
   const [step,setStep]   = useState("cal"); // cal|slot|form|done
   const [form,setForm]   = useState({name:"",email:"",worry:""});
+  const [bookings,setBookings] = useState([]);
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(BOOKINGS_KEY);
+      if (s) setBookings(JSON.parse(s) || []);
+    } catch {}
+  }, []);
+
+  function persistBookings(next) {
+    setBookings(next);
+    try { localStorage.setItem(BOOKINGS_KEY, JSON.stringify(next)); } catch {}
+  }
+
+  const dateKey = day ? `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}` : "";
+  const bookedSlotsForDate = bookings.filter(b => b.date === dateKey).map(b => b.slot);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
+  const formValid = form.name.trim() && emailValid && form.worry.trim();
 
   function isPast(d){ const dt=new Date(year,month,d); dt.setHours(0,0,0,0); const t=new Date(); t.setHours(0,0,0,0); return dt<t; }
   function prevM(){ if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1); setDay(null); }
   function nextM(){ if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1); setDay(null); }
   const dateLabel = day ? `${year}年${MONTHS_JP[month]}${day}日` : "";
+
+  function confirmBooking() {
+    if (!formValid || !dateKey || !slot) return;
+    const next = [...bookings, {
+      date: dateKey, slot,
+      name: form.name.trim(), email: form.email.trim(), worry: form.worry.trim(),
+      createdAt: new Date().toISOString(),
+    }];
+    persistBookings(next);
+    setStep("done");
+  }
 
   return (
     <div style={bk.wrap}>
@@ -304,7 +396,7 @@ function BookingTab() {
           </div>
           <div style={bk.slotGrid}>
             {SLOTS_DEMO.map(s=>{
-              const booked=BOOKED_DEMO.includes(s),sel=slot===s;
+              const booked=bookedSlotsForDate.includes(s),sel=slot===s;
               return (
                 <div key={s} style={{...bk.slotItem,
                   background:booked?"rgba(255,255,255,0.03)":sel?"linear-gradient(135deg,#7c3aed,#4f46e5)":"rgba(255,255,255,0.06)",
@@ -332,18 +424,23 @@ function BookingTab() {
             <span style={bk.subDate}>{dateLabel} {slot}</span>
           </div>
           <div style={bk.formFields}>
-            {[{l:"お名前",k:"name",p:"山田 太郎",t:"text"},{l:"メールアドレス",k:"email",p:"your@email.com",t:"email"}].map(({l,k,p,t})=>(
-              <div key={k} style={bk.formGroup}>
-                <label style={bk.formLabel}>{l}</label>
-                <input type={t} placeholder={p} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={bk.formInput}/>
-              </div>
-            ))}
+            <div style={bk.formGroup}>
+              <label style={bk.formLabel}>お名前</label>
+              <input type="text" placeholder="山田 太郎" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={bk.formInput}/>
+            </div>
+            <div style={bk.formGroup}>
+              <label style={bk.formLabel}>メールアドレス</label>
+              <input type="email" placeholder="your@email.com" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} style={{...bk.formInput, borderColor: form.email && !emailValid ? "rgba(248,113,113,0.6)" : undefined}}/>
+              {form.email && !emailValid && (
+                <div style={{fontSize:11,color:"#fca5a5",marginTop:4}}>メールアドレスの形式が正しくありません</div>
+              )}
+            </div>
             <div style={bk.formGroup}>
               <label style={bk.formLabel}>相談内容（簡単に）</label>
               <textarea placeholder="どんなことで悩んでいるか…" value={form.worry} onChange={e=>setForm(f=>({...f,worry:e.target.value}))} style={{...bk.formInput,height:80,resize:"none"}}/>
             </div>
           </div>
-          <button style={{...bk.primaryBtn,opacity:(form.name&&form.email&&form.worry)?1:0.35}} disabled={!(form.name&&form.email&&form.worry)} onClick={()=>setStep("done")}>
+          <button style={{...bk.primaryBtn,opacity:formValid?1:0.35}} disabled={!formValid} onClick={confirmBooking}>
             予約を確定する ✓
           </button>
         </div>
@@ -375,15 +472,18 @@ function BookingTab() {
 // ══════════════════════════════════════════════════
 function AdminTab({ profile, setProfile, initials }) {
   const [tab, setTab]   = useState(0);
-  const [saved,setSaved]= useState(false);
+  const [savedFlash,setSavedFlash] = useState(false);
   const [prev,setPrev]  = useState({msg:"",reply:"",loading:false});
 
-  function upd(k,v){ setProfile({...profile,[k]:v}); setSaved(false); }
+  function upd(k,v){
+    setProfile({...profile,[k]:v});
+    setSavedFlash(true);
+    setTimeout(()=>setSavedFlash(false), 1500);
+  }
   function updHour(i,k,v){
     const next=profile.activeHours.map((h,idx)=>idx===i?{...h,[k]:v}:h);
     upd("activeHours",next);
   }
-  function save(){ setSaved(true); setTimeout(()=>setSaved(false),2500); }
 
   async function runPreview(){
     if(!prev.msg.trim()) return;
@@ -418,9 +518,17 @@ function AdminTab({ profile, setProfile, initials }) {
         {profile.activeHours.map((h,i)=>(
           <div key={i} style={ad.sideHour}><span style={ad.sideHourDot}/>　{h.label} {h.start}〜{h.end}</div>
         ))}
-        <button style={{...ad.saveBtn,background:saved?"#059669":"linear-gradient(135deg,#7c3aed,#4f46e5)"}} onClick={save}>
-          {saved?"✓ 保存しました":"設定を保存する"}
-        </button>
+        <div style={{
+          ...ad.saveBtn,
+          background: savedFlash ? "#059669" : "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          cursor: "default",
+          textAlign: "center",
+          boxShadow: savedFlash ? "0 0 12px rgba(5,150,105,0.4)" : "none",
+          transition: "background 0.3s, box-shadow 0.3s",
+        }}>
+          {savedFlash ? "✓ 保存しました" : "🟢 変更は自動保存されます"}
+        </div>
       </div>
 
       {/* メイン */}
@@ -606,6 +714,10 @@ const ts = {
   bubble:{maxWidth:340,padding:"11px 15px",borderRadius:18,fontSize:14,lineHeight:1.75,wordBreak:"break-word"},
   bubbleAI:{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.1)",color:"#e8e6f0",borderBottomLeftRadius:4},
   bubbleUser:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",color:"#fff",borderBottomRightRadius:4,boxShadow:"0 4px 16px rgba(124,58,237,0.3)"},
+  bubbleError:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#fecaca"},
+  bubbleSafety:{background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",color:"#fde68a"},
+  toolbar:{display:"flex",justifyContent:"flex-end",padding:"8px 24px 0"},
+  clearBtn:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"5px 12px",color:"rgba(255,255,255,0.45)",fontSize:11,fontFamily:"inherit",cursor:"pointer",transition:"all 0.2s"},
   typing:{display:"flex",alignItems:"center",gap:6,padding:"14px 18px"},
   dot:{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#a78bfa",animation:"bounce 1.2s infinite"},
   time:{fontSize:10,color:"rgba(255,255,255,0.25)",marginTop:3,paddingInline:4},
