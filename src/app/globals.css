@@ -8,6 +8,14 @@ input:focus, textarea:focus {
   border-color: rgba(124,58,237,0.6) !important;
   box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
 }
+button:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+button { font-family: inherit; }
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+}
 textarea { resize: vertical; }
 
 input[type=range] { -webkit-appearance: none; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }

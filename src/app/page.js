@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { cs, ts, bk, ad, baseInput } from "./styles";
 
 // ─── 定数 ───────────────────────────────────────────
 const STORAGE_KEY = "kagemusha_profile_v2";
@@ -46,6 +47,18 @@ const WEEKDAYS = ["日","月","火","水","木","金","土"];
 const MONTHS_JP = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
 // ─── ユーティリティ ──────────────────────────────────
+function useIsMobile(breakpoint = 720) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = e => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 function nowTime() {
   return new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
 }
@@ -67,6 +80,7 @@ ${p.maxReplyLength}字以内で返答。禁止ワード：${p.ngWords}
 export default function App() {
   const [tab, setTab] = useState("chat"); // chat | booking | admin
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     try {
@@ -98,7 +112,7 @@ export default function App() {
 
       <div style={cs.shell}>
         {/* ヘッダー */}
-        <header style={cs.header}>
+        <header style={{...cs.header, ...(isMobile ? cs.headerMobile : {})}}>
           <div style={cs.headerLeft}>
             <div style={{
               ...cs.avatarSm,
@@ -108,15 +122,24 @@ export default function App() {
               {initials}
               <span style={isLiveNow ? cs.dotLive : cs.dotAI}/>
             </div>
-            <div>
-              <div style={cs.headerName}>{profile.name} <span style={cs.headerAI}>影武者相談室</span></div>
+            <div style={{minWidth:0}}>
+              <div style={cs.headerName}>
+                {profile.name}
+                {!isMobile && <span style={cs.headerAI}> 影武者相談室</span>}
+              </div>
               <div style={cs.headerStatus}>{isLiveNow ? "🟢 本人が対応中" : "🤖 AI影武者が対応中"}</div>
             </div>
           </div>
-          <nav style={cs.nav}>
-            {[["chat","💬 相談"],["booking","📅 予約"],["admin","🎭 設定"]].map(([id,label]) => (
-              <button key={id} style={{...cs.navBtn, ...(tab===id?cs.navBtnActive:{})}} onClick={()=>setTab(id)}>
-                {label}
+          <nav style={cs.nav} aria-label="メインナビゲーション">
+            {[["chat","💬","相談"],["booking","📅","予約"],["admin","🎭","設定"]].map(([id,icon,label]) => (
+              <button
+                key={id}
+                style={{...cs.navBtn, ...(tab===id?cs.navBtnActive:{}), ...(isMobile?{padding:"7px 10px"}:{})}}
+                onClick={()=>setTab(id)}
+                aria-current={tab===id ? "page" : undefined}
+                aria-label={label}
+              >
+                <span aria-hidden="true">{icon}</span>{!isMobile && ` ${label}`}
               </button>
             ))}
           </nav>
@@ -125,8 +148,8 @@ export default function App() {
         {/* コンテンツ */}
         <main style={cs.main}>
           {tab === "chat"    && <ChatTab profile={profile} isLiveNow={isLiveNow} initials={initials}/>}
-          {tab === "booking" && <BookingTab />}
-          {tab === "admin"   && <AdminTab profile={profile} setProfile={saveProfile} initials={initials}/>}
+          {tab === "booking" && <BookingTab isMobile={isMobile}/>}
+          {tab === "admin"   && <AdminTab profile={profile} setProfile={saveProfile} initials={initials} isMobile={isMobile}/>}
         </main>
       </div>
 
@@ -294,7 +317,7 @@ function ChatTab({ profile, isLiveNow, initials }) {
 // ══════════════════════════════════════════════════
 //  予約タブ
 // ══════════════════════════════════════════════════
-function BookingTab() {
+function BookingTab({ isMobile }) {
   const today = new Date();
   const [year,setYear]   = useState(today.getFullYear());
   const [month,setMonth] = useState(today.getMonth());
@@ -360,11 +383,11 @@ function BookingTab() {
       {step==="cal" && (
         <div style={bk.section}>
           <div style={bk.calNav}>
-            <button style={bk.navBtn} onClick={prevM}>‹</button>
+            <button type="button" aria-label="前の月" style={bk.navBtn} onClick={prevM}>‹</button>
             <span style={bk.calTitle}>{year}年 {MONTHS_JP[month]}</span>
-            <button style={bk.navBtn} onClick={nextM}>›</button>
+            <button type="button" aria-label="次の月" style={bk.navBtn} onClick={nextM}>›</button>
           </div>
-          <div style={bk.calGrid}>
+          <div style={bk.calGrid} role="grid" aria-label="日付選択">
             {WEEKDAYS.map(w=>(
               <div key={w} style={{...bk.cell,fontSize:11,color:w==="日"?"#f87171":w==="土"?"#60a5fa":"rgba(255,255,255,0.35)",paddingBottom:6}}>{w}</div>
             ))}
@@ -373,13 +396,22 @@ function BookingTab() {
               const d=i+1,past=isPast(d),sel=day===d;
               const isTd=d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
               return (
-                <div key={d} style={{...bk.cell,...bk.dayCell,
-                  opacity:past?.25:1,cursor:past?"default":"pointer",
-                  background:sel?"linear-gradient(135deg,#7c3aed,#4f46e5)":isTd?"rgba(124,58,237,0.18)":"transparent",
-                  border:isTd&&!sel?"1px solid rgba(124,58,237,0.45)":"1px solid transparent",
-                  color:sel?"#fff":"#e8e6f0",
-                  boxShadow:sel?"0 4px 14px rgba(124,58,237,0.4)":"none",
-                }} onClick={()=>{if(!past){setDay(d);setSlot(null);setStep("slot");}}}>{d}</div>
+                <button
+                  type="button"
+                  key={d}
+                  disabled={past}
+                  aria-label={`${MONTHS_JP[month]}${d}日${isTd?" 今日":""}`}
+                  aria-pressed={sel}
+                  style={{...bk.cell,...bk.dayCell,
+                    opacity:past?.25:1,cursor:past?"default":"pointer",
+                    background:sel?"linear-gradient(135deg,#7c3aed,#4f46e5)":isTd?"rgba(124,58,237,0.18)":"transparent",
+                    border:isTd&&!sel?"1px solid rgba(124,58,237,0.45)":"1px solid transparent",
+                    color:sel?"#fff":"#e8e6f0",
+                    boxShadow:sel?"0 4px 14px rgba(124,58,237,0.4)":"none",
+                    font:"inherit",
+                  }}
+                  onClick={()=>{if(!past){setDay(d);setSlot(null);setStep("slot");}}}
+                >{d}</button>
               );
             })}
           </div>
@@ -394,19 +426,29 @@ function BookingTab() {
             <button style={bk.backBtn} onClick={()=>setStep("cal")}>← 日程を変更</button>
             <span style={bk.subDate}>{dateLabel}</span>
           </div>
-          <div style={bk.slotGrid}>
+          <div style={bk.slotGrid} role="radiogroup" aria-label="時間帯">
             {SLOTS_DEMO.map(s=>{
               const booked=bookedSlotsForDate.includes(s),sel=slot===s;
               return (
-                <div key={s} style={{...bk.slotItem,
-                  background:booked?"rgba(255,255,255,0.03)":sel?"linear-gradient(135deg,#7c3aed,#4f46e5)":"rgba(255,255,255,0.06)",
-                  border:booked?"1px solid rgba(255,255,255,0.04)":sel?"none":"1px solid rgba(255,255,255,0.1)",
-                  color:booked?"rgba(255,255,255,0.18)":sel?"#fff":"#e8e6f0",
-                  cursor:booked?"not-allowed":"pointer",
-                  boxShadow:sel?"0 4px 14px rgba(124,58,237,0.4)":"none",
-                }} onClick={()=>{if(!booked)setSlot(s);}}>
+                <button
+                  type="button"
+                  key={s}
+                  disabled={booked}
+                  role="radio"
+                  aria-checked={sel}
+                  aria-label={`${s}${booked?" 満席":""}`}
+                  style={{...bk.slotItem,
+                    background:booked?"rgba(255,255,255,0.03)":sel?"linear-gradient(135deg,#7c3aed,#4f46e5)":"rgba(255,255,255,0.06)",
+                    border:booked?"1px solid rgba(255,255,255,0.04)":sel?"none":"1px solid rgba(255,255,255,0.1)",
+                    color:booked?"rgba(255,255,255,0.18)":sel?"#fff":"#e8e6f0",
+                    cursor:booked?"not-allowed":"pointer",
+                    boxShadow:sel?"0 4px 14px rgba(124,58,237,0.4)":"none",
+                    font:"inherit",
+                  }}
+                  onClick={()=>{if(!booked)setSlot(s);}}
+                >
                   {booked?<><span>{s}</span><span style={bk.fullBadge}>満席</span></>:s}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -470,7 +512,7 @@ function BookingTab() {
 // ══════════════════════════════════════════════════
 //  管理タブ
 // ══════════════════════════════════════════════════
-function AdminTab({ profile, setProfile, initials }) {
+function AdminTab({ profile, setProfile, initials, isMobile }) {
   const [tab, setTab]   = useState(0);
   const [savedFlash,setSavedFlash] = useState(false);
   const [prev,setPrev]  = useState({msg:"",reply:"",loading:false});
@@ -501,9 +543,9 @@ function AdminTab({ profile, setProfile, initials }) {
   const ADMIN_TABS=["基本情報","口調・スタイル","対応時間","プレビュー"];
 
   return (
-    <div style={ad.wrap}>
+    <div style={{...ad.wrap, ...(isMobile ? ad.wrapMobile : {})}}>
       {/* サイドバー */}
-      <div style={ad.sidebar}>
+      <div style={{...ad.sidebar, ...(isMobile ? ad.sidebarMobile : {})}}>
         <div style={ad.sideLabel}>影武者プレビュー</div>
         <div style={{...ad.avatarBig,background:`linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})`,boxShadow:`0 0 32px ${profile.avatarColor1}55`}}>
           {initials}
@@ -549,15 +591,23 @@ function AdminTab({ profile, setProfile, initials }) {
               <Field label="自己紹介文"><Textarea value={profile.selfIntro} onChange={v=>upd("selfIntro",v)} placeholder="AIが使う自己紹介テキスト" rows={3}/></Field>
               <Field label="最初の挨拶"><Textarea value={profile.greeting} onChange={v=>upd("greeting",v)} placeholder="チャット開始時の挨拶" rows={2}/></Field>
               <Field label="アバターカラー">
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}} role="radiogroup" aria-label="アバターカラー">
                   {COLOR_PRESETS.map(([c1,c2],i)=>(
-                    <div key={i} onClick={()=>{upd("avatarColor1",c1);upd("avatarColor2",c2);}} style={{
-                      width:36,height:36,borderRadius:"50%",cursor:"pointer",
-                      background:`linear-gradient(135deg,${c1},${c2})`,
-                      border:profile.avatarColor1===c1?"3px solid #fff":"3px solid transparent",
-                      boxShadow:profile.avatarColor1===c1?`0 0 10px ${c1}88`:"none",
-                      transition:"all 0.2s",
-                    }}/>
+                    <button
+                      type="button"
+                      key={i}
+                      role="radio"
+                      aria-checked={profile.avatarColor1===c1}
+                      aria-label={`カラー${i+1}`}
+                      onClick={()=>{upd("avatarColor1",c1);upd("avatarColor2",c2);}}
+                      style={{
+                        width:36,height:36,borderRadius:"50%",cursor:"pointer",padding:0,
+                        background:`linear-gradient(135deg,${c1},${c2})`,
+                        border:profile.avatarColor1===c1?"3px solid #fff":"3px solid transparent",
+                        boxShadow:profile.avatarColor1===c1?`0 0 10px ${c1}88`:"none",
+                        transition:"all 0.2s",
+                      }}
+                    />
                   ))}
                 </div>
               </Field>
@@ -569,30 +619,46 @@ function AdminTab({ profile, setProfile, initials }) {
           {tab===1 && (
             <>
               <Field label="応答スタイル">
-                <div style={{display:"flex",gap:10}}>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}} role="radiogroup" aria-label="応答スタイル">
                   {STYLE_OPTIONS.map(o=>(
-                    <div key={o.value} onClick={()=>upd("style",o.value)} style={{
-                      flex:1,borderRadius:12,padding:"12px",cursor:"pointer",transition:"all 0.2s",
-                      border:profile.style===o.value?"1px solid #7c3aed":"1px solid rgba(255,255,255,0.08)",
-                      background:profile.style===o.value?"rgba(124,58,237,0.15)":"rgba(255,255,255,0.04)",
-                    }}>
+                    <button
+                      type="button"
+                      key={o.value}
+                      role="radio"
+                      aria-checked={profile.style===o.value}
+                      onClick={()=>upd("style",o.value)}
+                      style={{
+                        flex:"1 1 120px",borderRadius:12,padding:"12px",cursor:"pointer",transition:"all 0.2s",
+                        border:profile.style===o.value?"1px solid #7c3aed":"1px solid rgba(255,255,255,0.08)",
+                        background:profile.style===o.value?"rgba(124,58,237,0.15)":"rgba(255,255,255,0.04)",
+                        textAlign:"left",font:"inherit",
+                      }}
+                    >
                       <div style={{fontSize:13,fontWeight:600,color:"#f1f0ff",marginBottom:4}}>{o.label}</div>
                       <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",lineHeight:1.5}}>{o.desc}</div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </Field>
               <Field label="言葉づかい">
-                <div style={{display:"flex",gap:10}}>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}} role="radiogroup" aria-label="言葉づかい">
                   {LANG_OPTIONS.map(o=>(
-                    <div key={o.value} onClick={()=>upd("language",o.value)} style={{
-                      flex:1,borderRadius:12,padding:"12px",cursor:"pointer",transition:"all 0.2s",
-                      border:profile.language===o.value?"1px solid #7c3aed":"1px solid rgba(255,255,255,0.08)",
-                      background:profile.language===o.value?"rgba(124,58,237,0.15)":"rgba(255,255,255,0.04)",
-                    }}>
+                    <button
+                      type="button"
+                      key={o.value}
+                      role="radio"
+                      aria-checked={profile.language===o.value}
+                      onClick={()=>upd("language",o.value)}
+                      style={{
+                        flex:"1 1 110px",borderRadius:12,padding:"12px",cursor:"pointer",transition:"all 0.2s",
+                        border:profile.language===o.value?"1px solid #7c3aed":"1px solid rgba(255,255,255,0.08)",
+                        background:profile.language===o.value?"rgba(124,58,237,0.15)":"rgba(255,255,255,0.04)",
+                        textAlign:"left",font:"inherit",
+                      }}
+                    >
                       <div style={{fontSize:13,fontWeight:600,color:"#f1f0ff",marginBottom:4}}>{o.label}</div>
                       <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{o.example}</div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </Field>
@@ -612,12 +678,12 @@ function AdminTab({ profile, setProfile, initials }) {
                 本人が直接対応する時間帯を設定します。それ以外はAI影武者が自動応答します。
               </div>
               {profile.activeHours.map((h,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px 16px"}}>
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px 16px"}}>
                   <span style={{fontSize:11,color:"#a78bfa",background:"rgba(124,58,237,0.15)",borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap"}}>{h.label}</span>
-                  <input type="time" value={h.start} onChange={e=>updHour(i,"start",e.target.value)} style={ad.timeInput}/>
+                  <input type="time" aria-label={`${h.label}の開始時刻`} value={h.start} onChange={e=>updHour(i,"start",e.target.value)} style={ad.timeInput}/>
                   <span style={{color:"rgba(255,255,255,0.3)"}}>〜</span>
-                  <input type="time" value={h.end} onChange={e=>updHour(i,"end",e.target.value)} style={ad.timeInput}/>
-                  <input value={h.label} onChange={e=>updHour(i,"label",e.target.value)} placeholder="ラベル" style={{...ad.input,width:80}}/>
+                  <input type="time" aria-label={`${h.label}の終了時刻`} value={h.end} onChange={e=>updHour(i,"end",e.target.value)} style={ad.timeInput}/>
+                  <input aria-label="ラベル" value={h.label} onChange={e=>updHour(i,"label",e.target.value)} placeholder="ラベル" style={{...ad.input,width:80,flex:isMobile?"1 1 100%":"none"}}/>
                 </div>
               ))}
               {/* 24時間バー */}
@@ -681,107 +747,3 @@ function Input({value,onChange,placeholder,style:extra}){
 function Textarea({value,onChange,placeholder,rows=3}){
   return <textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{...baseInput,lineHeight:1.7}}/>;
 }
-const baseInput={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 14px",color:"#f1f0ff",fontSize:13,fontFamily:"inherit",width:"100%",transition:"all 0.2s"};
-
-// ══════════════════════════════════════════════════
-//  スタイル定義
-// ══════════════════════════════════════════════════
-const cs = {
-  root:{minHeight:"100vh",background:"linear-gradient(135deg,#080612 0%,#120d20 50%,#0a1520 100%)",fontFamily:"'Noto Sans JP',sans-serif",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center"},
-  bg1:{position:"fixed",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(124,58,237,0.1) 0%,transparent 70%)",top:-200,right:-200,pointerEvents:"none"},
-  bg2:{position:"fixed",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(37,99,235,0.08) 0%,transparent 70%)",bottom:-150,left:-150,pointerEvents:"none"},
-  bg3:{position:"fixed",width:300,height:300,borderRadius:"50%",background:"radial-gradient(circle,rgba(219,39,119,0.05) 0%,transparent 70%)",top:"40%",left:"30%",pointerEvents:"none"},
-  shell:{width:"100%",maxWidth:900,display:"flex",flexDirection:"column",height:"100vh"},
-  header:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 24px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.07)",backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:10},
-  headerLeft:{display:"flex",alignItems:"center",gap:12},
-  avatarSm:{width:44,height:44,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Serif JP',serif",fontSize:18,fontWeight:700,color:"#fff",position:"relative",flexShrink:0},
-  dotLive:{position:"absolute",bottom:1,right:1,width:11,height:11,borderRadius:"50%",background:"#22c55e",border:"2px solid #0a0812"},
-  dotAI:{position:"absolute",bottom:1,right:1,width:11,height:11,borderRadius:"50%",background:"#a78bfa",border:"2px solid #0a0812"},
-  headerName:{color:"#f1f0ff",fontWeight:600,fontSize:14,fontFamily:"'Noto Serif JP',serif"},
-  headerAI:{color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:400},
-  headerStatus:{color:"#a78bfa",fontSize:11,marginTop:2},
-  nav:{display:"flex",gap:4},
-  navBtn:{background:"transparent",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"7px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,fontFamily:"inherit",transition:"all 0.2s"},
-  navBtnActive:{background:"rgba(124,58,237,0.2)",border:"1px solid rgba(124,58,237,0.5)",color:"#c4b5fd"},
-  main:{flex:1,overflow:"auto",display:"flex",flexDirection:"column"},
-};
-
-const ts = {
-  wrap:{display:"flex",flexDirection:"column",height:"100%",flex:1},
-  messages:{flex:1,overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:14},
-  row:{display:"flex",alignItems:"flex-end",gap:10},
-  msgAvatar:{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:700,flexShrink:0,fontFamily:"'Noto Serif JP',serif"},
-  bubble:{maxWidth:340,padding:"11px 15px",borderRadius:18,fontSize:14,lineHeight:1.75,wordBreak:"break-word"},
-  bubbleAI:{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.1)",color:"#e8e6f0",borderBottomLeftRadius:4},
-  bubbleUser:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",color:"#fff",borderBottomRightRadius:4,boxShadow:"0 4px 16px rgba(124,58,237,0.3)"},
-  bubbleError:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#fecaca"},
-  bubbleSafety:{background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.35)",color:"#fde68a"},
-  toolbar:{display:"flex",justifyContent:"flex-end",padding:"8px 24px 0"},
-  clearBtn:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"5px 12px",color:"rgba(255,255,255,0.45)",fontSize:11,fontFamily:"inherit",cursor:"pointer",transition:"all 0.2s"},
-  typing:{display:"flex",alignItems:"center",gap:6,padding:"14px 18px"},
-  dot:{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#a78bfa",animation:"bounce 1.2s infinite"},
-  time:{fontSize:10,color:"rgba(255,255,255,0.25)",marginTop:3,paddingInline:4},
-  quickWrap:{padding:"0 24px 12px"},
-  quickLabel:{fontSize:11,color:"rgba(255,255,255,0.3)",marginBottom:8},
-  quickBtns:{display:"flex",flexWrap:"wrap",gap:8},
-  quickBtn:{background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.25)",borderRadius:20,padding:"6px 14px",color:"#c4b5fd",fontSize:12,cursor:"pointer"},
-  inputRow:{padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:10,alignItems:"flex-end"},
-  textarea:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"11px 15px",color:"#f1f0ff",fontSize:14,resize:"none",fontFamily:"inherit",lineHeight:1.6},
-  sendBtn:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",border:"none",borderRadius:12,padding:"11px 20px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 14px rgba(124,58,237,0.3)",transition:"opacity 0.2s",whiteSpace:"nowrap"},
-  footer:{padding:"8px 20px 14px",fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"},
-};
-
-const bk = {
-  wrap:{padding:"24px",maxWidth:480,margin:"0 auto",width:"100%"},
-  steps:{display:"flex",alignItems:"center",justifyContent:"center",marginBottom:24,gap:0},
-  stepItem:{display:"flex",alignItems:"center",gap:6},
-  stepCircle:{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:600,color:"#fff",transition:"all 0.3s"},
-  stepLabel:{fontSize:11,marginRight:4,transition:"color 0.3s"},
-  stepLine:{width:20,height:1,marginRight:4},
-  section:{},
-  calNav:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14},
-  navBtn:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,width:32,height:32,color:"#c4b5fd",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"},
-  calTitle:{fontFamily:"'Noto Serif JP',serif",color:"#f1f0ff",fontSize:15,fontWeight:600},
-  calGrid:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4},
-  cell:{aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13},
-  dayCell:{borderRadius:8,transition:"all 0.15s",userSelect:"none"},
-  hint:{marginTop:14,fontSize:11,color:"rgba(255,255,255,0.3)",textAlign:"center"},
-  subHeader:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16},
-  backBtn:{background:"none",border:"none",color:"#a78bfa",cursor:"pointer",fontSize:13,padding:0},
-  subDate:{fontFamily:"'Noto Serif JP',serif",color:"#f1f0ff",fontSize:14,fontWeight:600},
-  slotGrid:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20},
-  slotItem:{borderRadius:12,padding:"12px 8px",textAlign:"center",fontSize:14,fontWeight:500,transition:"all 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:6},
-  fullBadge:{fontSize:10,color:"rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.05)",borderRadius:4,padding:"1px 4px"},
-  primaryBtn:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",border:"none",borderRadius:14,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 18px rgba(124,58,237,0.3)",transition:"opacity 0.2s"},
-  formFields:{display:"flex",flexDirection:"column",gap:14,marginBottom:20},
-  formGroup:{display:"flex",flexDirection:"column",gap:6},
-  formLabel:{fontSize:12,color:"#a78bfa",fontWeight:500},
-  formInput:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 14px",color:"#f1f0ff",fontSize:13,fontFamily:"inherit",width:"100%"},
-  doneTitle:{fontFamily:"'Noto Serif JP',serif",color:"#f1f0ff",fontSize:20,fontWeight:700,marginBottom:8},
-  doneSub:{color:"#a78bfa",fontSize:14,lineHeight:1.8,marginBottom:20},
-  doneCard:{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"14px 18px",marginBottom:16,textAlign:"left",display:"flex",flexDirection:"column",gap:10},
-  doneRow:{display:"flex",justifyContent:"space-between",fontSize:13},
-};
-
-const ad = {
-  wrap:{display:"flex",gap:20,padding:"20px 24px",flex:1,overflow:"auto"},
-  sidebar:{width:200,flexShrink:0,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,padding:"20px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:8,alignSelf:"flex-start",position:"sticky",top:0},
-  sideLabel:{fontSize:10,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4},
-  avatarBig:{width:70,height:70,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Noto Serif JP',serif",fontSize:28,fontWeight:700,color:"#fff",transition:"all 0.4s",marginBottom:4},
-  sideName:{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:600,color:"#f1f0ff",textAlign:"center"},
-  sideTag:{fontSize:11,color:"#a78bfa",textAlign:"center"},
-  sideSp:{fontSize:10,color:"rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.05)",borderRadius:20,padding:"3px 10px",textAlign:"center",marginTop:2},
-  sideDivider:{width:"100%",height:1,background:"rgba(255,255,255,0.07)",margin:"4px 0"},
-  sideSecLabel:{fontSize:10,color:"rgba(255,255,255,0.25)",letterSpacing:"0.08em",textTransform:"uppercase",width:"100%"},
-  sideGreeting:{fontSize:11,color:"rgba(255,255,255,0.45)",lineHeight:1.6,fontStyle:"italic",textAlign:"center"},
-  sideHour:{display:"flex",alignItems:"center",fontSize:11,color:"rgba(255,255,255,0.45)",width:"100%"},
-  sideHourDot:{width:5,height:5,borderRadius:"50%",background:"#7c3aed",flexShrink:0,marginRight:6},
-  saveBtn:{marginTop:8,width:"100%",padding:"9px",border:"none",borderRadius:11,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",boxShadow:"0 3px 12px rgba(124,58,237,0.3)",transition:"background 0.3s"},
-  main:{flex:1,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,overflow:"hidden"},
-  tabRow:{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",background:"rgba(0,0,0,0.2)"},
-  tab:{flex:1,padding:"12px 8px",border:"none",background:"transparent",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:12,fontFamily:"inherit",borderBottom:"2px solid transparent",transition:"all 0.2s"},
-  tabActive:{color:"#c4b5fd",borderBottomColor:"#7c3aed",background:"rgba(124,58,237,0.06)"},
-  tabBody:{padding:"20px",display:"flex",flexDirection:"column",gap:18},
-  input:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 14px",color:"#f1f0ff",fontSize:13,fontFamily:"inherit",transition:"all 0.2s"},
-  timeInput:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"6px 10px",color:"#f1f0ff",fontSize:13,fontFamily:"inherit",colorScheme:"dark"},
-};
