@@ -25,7 +25,54 @@ export const DEFAULT_PROFILE = {
   maxReplyLength: "150",
   style: "empathy_first",
   language: "polite",
+  theme: "default",
 };
+
+// ─── 背景テーマプリセット ────────────────────────────
+export const BG_PRESETS = [
+  { id: "default", name: "夜の紫", bg: "linear-gradient(135deg,#080612 0%,#120d20 50%,#0a1520 100%)" },
+  { id: "ocean",   name: "深海",   bg: "linear-gradient(135deg,#020617 0%,#0c1e3a 50%,#0a1f2a 100%)" },
+  { id: "sakura",  name: "桜夜",   bg: "linear-gradient(135deg,#1a0a14 0%,#2a0e1f 50%,#1a0e1c 100%)" },
+  { id: "forest",  name: "森閑",   bg: "linear-gradient(135deg,#0a1410 0%,#0e2018 50%,#08120e 100%)" },
+  { id: "paper",   name: "和紙",   bg: "linear-gradient(135deg,#1c1612 0%,#2a201a 50%,#1f1813 100%)" },
+];
+
+export function getThemeBg(themeId) {
+  return (BG_PRESETS.find(t => t.id === themeId) || BG_PRESETS[0]).bg;
+}
+
+// ─── ファイルダウンロード ──────────────────────────────
+export function downloadFile(filename, content, mime = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function bookingsToCsv(bookings) {
+  const headers = ["date", "slot", "name", "email", "worry", "createdAt"];
+  const escape = v => {
+    const s = String(v ?? "");
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = bookings.map(b => headers.map(h => escape(b[h])).join(","));
+  return "﻿" + [headers.join(","), ...rows].join("\n");
+}
+
+export function messagesToMarkdown(messages, profileName) {
+  const header = `# ${profileName} との会話\n\n_${new Date().toLocaleString("ja-JP")} 出力_\n\n---\n`;
+  const body = messages.map(m => {
+    const who = m.role === "user" ? "**あなた**" : `**${profileName}**`;
+    const time = m.time ? ` _(${m.time})_` : "";
+    return `${who}${time}\n\n${m.content}\n`;
+  }).join("\n");
+  return header + "\n" + body;
+}
 
 // ─── 選択肢 ─────────────────────────────────────────
 export const SLOTS_DEMO = ["10:00","10:30","11:00","11:30","14:00","14:30","15:00","19:00","19:30","20:00"];

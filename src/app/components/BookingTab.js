@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   BOOKINGS_KEY, SLOTS_DEMO, MONTHS_JP, WEEKDAYS,
-  getDaysInMonth, getFirstDay,
+  getDaysInMonth, getFirstDay, downloadFile, bookingsToCsv,
 } from "../lib";
 import { bk } from "../styles";
 
@@ -76,8 +76,21 @@ export default function BookingTab({ isMobile }) {
           border: "1px solid rgba(255,255,255,0.07)",
           borderRadius: 14, padding: "14px 16px", marginBottom: 18,
         }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-            あなたの予約 ({upcoming.length}件)
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              あなたの予約 ({upcoming.length}件)
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadFile(`bookings-${todayKey}.csv`, bookingsToCsv(bookings), "text/csv;charset=utf-8")}
+              aria-label="予約をCSVでエクスポート"
+              style={{
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                color: "#c4b5fd", borderRadius: 8, padding: "4px 10px",
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              }}>
+              📥 CSV
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {upcoming.map(b => {

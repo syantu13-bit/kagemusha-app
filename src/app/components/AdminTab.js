@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import {
-  COLOR_PRESETS, STYLE_OPTIONS, LANG_OPTIONS,
+  COLOR_PRESETS, STYLE_OPTIONS, LANG_OPTIONS, BG_PRESETS,
   buildSystemPrompt,
 } from "../lib";
 import { ad, baseInput } from "../styles";
@@ -122,6 +122,26 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
                 </div>
               </Field>
               <Field label="NGワード（カンマ区切り）"><Input value={profile.ngWords} onChange={v => upd("ngWords", v)} placeholder="例：保証します,絶対に" /></Field>
+              <Field label="背景テーマ">
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }} role="radiogroup" aria-label="背景テーマ">
+                  {BG_PRESETS.map(t => (
+                    <button
+                      type="button" key={t.id} role="radio"
+                      aria-checked={profile.theme === t.id}
+                      aria-label={t.name}
+                      onClick={() => upd("theme", t.id)}
+                      style={{
+                        flex: "1 1 80px", borderRadius: 12, padding: 0, cursor: "pointer", overflow: "hidden",
+                        border: profile.theme === t.id ? "2px solid #a78bfa" : "2px solid rgba(255,255,255,0.08)",
+                        boxShadow: profile.theme === t.id ? "0 0 12px rgba(167,139,250,0.4)" : "none",
+                        transition: "all 0.2s", height: 60, position: "relative",
+                      }}>
+                      <div style={{ position: "absolute", inset: 0, background: t.bg }} />
+                      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "4px 6px", fontSize: 11, color: "#fff", textAlign: "center", background: "rgba(0,0,0,0.35)" }}>{t.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </Field>
             </>
           )}
 

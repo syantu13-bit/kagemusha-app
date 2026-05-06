@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { CHAT_KEY, QUICK_TOPICS, nowTime, buildSystemPrompt } from "../lib";
+import { CHAT_KEY, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown } from "../lib";
 import { ts } from "../styles";
 
 export default function ChatTab({ profile, initials }) {
@@ -86,9 +86,19 @@ export default function ChatTab({ profile, initials }) {
   return (
     <div style={ts.wrap}>
       {messages.length > 1 && (
-        <div style={ts.toolbar}>
+        <div style={{ ...ts.toolbar, gap: 8 }}>
+          <button
+            style={ts.clearBtn}
+            onClick={() => {
+              const stamp = new Date().toISOString().slice(0, 10);
+              downloadFile(`chat-${profile.name || "kagemusha"}-${stamp}.md`, messagesToMarkdown(messages, profile.name || "影武者"), "text/markdown;charset=utf-8");
+            }}
+            aria-label="会話をマークダウンでエクスポート"
+          >
+            📥 エクスポート
+          </button>
           <button style={ts.clearBtn} onClick={clearChat} aria-label="会話をリセット">
-            🗑 会話をリセット
+            🗑 リセット
           </button>
         </div>
       )}

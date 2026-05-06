@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { STORAGE_KEY, DEFAULT_PROFILE, useIsMobile, isLiveAt } from "./lib";
+import { STORAGE_KEY, DEFAULT_PROFILE, useIsMobile, isLiveAt, getThemeBg } from "./lib";
 import { cs } from "./styles";
 import ChatTab from "./components/ChatTab";
 import BookingTab from "./components/BookingTab";
@@ -27,7 +27,7 @@ export default function App() {
   const isLiveNow = isLiveAt(profile);
 
   return (
-    <div style={cs.root}>
+    <div style={{ ...cs.root, background: getThemeBg(profile.theme) }}>
       <div style={cs.bg1} /><div style={cs.bg2} /><div style={cs.bg3} />
 
       <div style={cs.shell}>
