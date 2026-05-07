@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   bookingsKey, SLOTS_DEMO, MONTHS_JP, WEEKDAYS,
   getDaysInMonth, getFirstDay, downloadFile, bookingsToCsv,
+  notificationStatus, requestNotificationPermission, scheduleBookingReminders,
 } from "../lib";
 import { bk } from "../styles";
 
@@ -15,6 +16,25 @@ export default function BookingTab({ profile, isMobile }) {
   const [step, setStep] = useState("cal"); // cal|slot|form|done
   const [form, setForm] = useState({ name: "", email: "", worry: "" });
   const [bookings, setBookings] = useState([]);
+  const [notifState, setNotifState] = useState("default");
+
+  useEffect(() => {
+    setNotifState(notificationStatus());
+  }, []);
+
+  // 予約 or 通知許可が変わったらリマインダーを再スケジュール
+  useEffect(() => {
+    if (notifState !== "granted") return;
+    return scheduleBookingReminders(bookings, profile.name || "影武者", 30);
+  }, [bookings, profile.name, notifState]);
+
+  async function enableNotifications() {
+    const r = await requestNotificationPermission();
+    setNotifState(r);
+    if (r === "granted") {
+      try { new Notification("通知が有効になりました", { body: "予約の30分前にお知らせします" }); } catch {}
+    }
+  }
 
   useEffect(() => {
     try {
@@ -75,6 +95,36 @@ export default function BookingTab({ profile, isMobile }) {
 
   return (
     <div style={bk.wrap}>
+      {/* 通知許可バナー */}
+      {step === "cal" && upcoming.length > 0 && notifState === "default" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.3)",
+          borderRadius: 12, padding: "10px 14px", marginBottom: 12,
+          fontSize: 12, color: "#c4b5fd",
+        }}>
+          <span aria-hidden="true">🔔</span>
+          <span style={{ flex: 1 }}>予約の30分前にブラウザ通知でお知らせできます</span>
+          <button
+            type="button"
+            onClick={enableNotifications}
+            style={{
+              background: "linear-gradient(135deg,#7c3aed,#4f46e5)", border: "none",
+              color: "#fff", borderRadius: 8, padding: "6px 12px",
+              fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            }}>
+            通知を有効にする
+          </button>
+        </div>
+      )}
+      {step === "cal" && notifState === "denied" && upcoming.length > 0 && (
+        <div style={{
+          fontSize: 11, color: "rgba(255,255,255,0.35)",
+          padding: "6px 4px", marginBottom: 8,
+        }}>
+          🔕 通知はブロックされています（ブラウザの設定から有効化できます）
+        </div>
+      )}
       {/* 既存の予約リスト */}
       {step === "cal" && upcoming.length > 0 && (
         <div style={{

@@ -183,3 +183,51 @@ export function isLiveAt(profile, date = new Date()) {
     return cur >= sh*60+sm && cur < eh*60+em;
   });
 }
+
+// ─── 通知（リマインダー） ────────────────────────────
+export function notificationsSupported() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+export function notificationStatus() {
+  if (!notificationsSupported()) return "unsupported";
+  return Notification.permission; // "default" | "granted" | "denied"
+}
+
+export async function requestNotificationPermission() {
+  if (!notificationsSupported()) return "unsupported";
+  try {
+    const r = await Notification.requestPermission();
+    return r;
+  } catch { return "denied"; }
+}
+
+export function bookingDateTime(b) {
+  const [y, m, d] = b.date.split("-").map(Number);
+  const [hh, mm] = b.slot.split(":").map(Number);
+  return new Date(y, m - 1, d, hh, mm);
+}
+
+// 各予約の指定分前に通知を1回ずつ予約する。戻り値はクリーンアップ関数。
+// setTimeout なのでタブが開いている間のみ動作する。
+export function scheduleBookingReminders(bookings, profileName, leadMinutes = 30) {
+  if (notificationStatus() !== "granted") return () => {};
+  const now = Date.now();
+  const horizon = 24 * 60 * 60 * 1000; // 24時間以内のみ予約
+  const timers = [];
+  for (const b of bookings) {
+    const fireAt = bookingDateTime(b).getTime() - leadMinutes * 60_000;
+    const delay = fireAt - now;
+    if (delay <= 0 || delay > horizon) continue;
+    const id = setTimeout(() => {
+      try {
+        new Notification("もうすぐ予約時間です", {
+          body: `${profileName} ・ ${b.date} ${b.slot}（${leadMinutes}分前）`,
+          tag: `booking-${b.date}-${b.slot}-${profileName}`,
+        });
+      } catch {}
+    }, delay);
+    timers.push(id);
+  }
+  return () => timers.forEach(t => clearTimeout(t));
+}
