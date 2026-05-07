@@ -24,7 +24,10 @@ function Textarea({ value, onChange, placeholder, rows = 3 }) {
   return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows} style={{ ...baseInput, lineHeight: 1.7 }} />;
 }
 
-export default function AdminTab({ profile, setProfile, initials, isMobile }) {
+export default function AdminTab({
+  profile, setProfile, initials, isMobile,
+  profiles, activeId, onSelectProfile, onAddProfile, onDeleteProfile,
+}) {
   const [tab, setTab] = useState(0);
   const [savedFlash, setSavedFlash] = useState(false);
   const [prev, setPrev] = useState({ msg: "", reply: "", loading: false });
@@ -51,7 +54,8 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
         return;
       }
       if (!confirm(`「${parsed.name}」の設定を読み込んで現在の設定を上書きしますか？`)) return;
-      setProfile({ ...DEFAULT_PROFILE, ...parsed });
+      // 現在のプロフィールIDは保持（プロフィール一覧の整合性のため）
+      setProfile({ ...DEFAULT_PROFILE, ...parsed, id: profile.id });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
     } catch {
@@ -86,6 +90,39 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
     <div style={{ ...ad.wrap, ...(isMobile ? ad.wrapMobile : {}) }}>
       {/* サイドバー */}
       <div style={{ ...ad.sidebar, ...(isMobile ? ad.sidebarMobile : {}) }}>
+        {profiles && profiles.length > 0 && (
+          <div style={{ width: "100%", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+              編集中の影武者
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <select
+                value={activeId}
+                onChange={e => onSelectProfile?.(e.target.value)}
+                aria-label="影武者を選択"
+                style={{
+                  flex: 1, background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+                  padding: "6px 8px", color: "#f1f0ff", fontSize: 12,
+                  fontFamily: "inherit", colorScheme: "dark",
+                }}>
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.name || "（名称未設定）"}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={onAddProfile}
+                aria-label="新しい影武者を追加"
+                title="新しい影武者を追加"
+                style={{
+                  background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.4)",
+                  color: "#c4b5fd", borderRadius: 8, width: 32, fontSize: 16,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>+</button>
+            </div>
+          </div>
+        )}
         <div style={ad.sideLabel}>影武者プレビュー</div>
         <div style={{ ...ad.avatarBig, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})`, boxShadow: `0 0 32px ${profile.avatarColor1}55` }}>
           {initials}
@@ -146,6 +183,20 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
             aria-hidden="true"
           />
         </div>
+        {profiles && profiles.length > 1 && (
+          <button
+            type="button"
+            onClick={() => onDeleteProfile?.(activeId)}
+            aria-label="この影武者を削除"
+            style={{
+              width: "100%", marginTop: 4,
+              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+              color: "#fca5a5", borderRadius: 8, padding: "6px",
+              fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+            }}>
+            🗑 この影武者を削除
+          </button>
+        )}
       </div>
 
       {/* メイン */}

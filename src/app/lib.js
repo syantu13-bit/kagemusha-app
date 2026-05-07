@@ -2,9 +2,19 @@
 import { useState, useEffect } from "react";
 
 // ─── 永続化キー ──────────────────────────────────────
-export const STORAGE_KEY = "kagemusha_profile_v2";
-export const CHAT_KEY = "kagemusha_chat_v1";
-export const BOOKINGS_KEY = "kagemusha_bookings_v1";
+export const PROFILES_KEY = "kagemusha_profiles_v3";
+// レガシー（v2/v1）からの移行用
+const LEGACY_PROFILE_KEY = "kagemusha_profile_v2";
+const LEGACY_CHAT_KEY = "kagemusha_chat_v1";
+const LEGACY_BOOKINGS_KEY = "kagemusha_bookings_v1";
+
+export const chatKey = (id) => `kagemusha_chat_v2_${id}`;
+export const bookingsKey = (id) => `kagemusha_bookings_v2_${id}`;
+
+export function generateId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "p_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
 
 // ─── デフォルトプロフィール ──────────────────────────
 export const DEFAULT_PROFILE = {
@@ -123,6 +133,46 @@ export function buildSystemPrompt(p) {
 スタイル：${styleMap[p.style]}
 ${p.maxReplyLength}字以内で返答。禁止ワード：${p.ngWords}
 相談者に${p.name}として真摯に答えてください。`;
+}
+
+// ─── プロフィール永続化 ────────────────────────────
+export function loadProfilesState() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PROFILES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.profiles?.length && parsed.activeId) {
+        // 互換性: idが欠けているprofileを補正
+        const fixed = parsed.profiles.map(p => p.id ? p : { ...p, id: generateId() });
+        const activeId = fixed.find(p => p.id === parsed.activeId) ? parsed.activeId : fixed[0].id;
+        return { profiles: fixed, activeId };
+      }
+    }
+    // v2 -> v3 マイグレーション
+    const legacyRaw = localStorage.getItem(LEGACY_PROFILE_KEY);
+    if (legacyRaw) {
+      const old = JSON.parse(legacyRaw);
+      const id = generateId();
+      const merged = { ...DEFAULT_PROFILE, ...old, id };
+      const oldChat = localStorage.getItem(LEGACY_CHAT_KEY);
+      if (oldChat) try { localStorage.setItem(chatKey(id), oldChat); } catch {}
+      const oldBookings = localStorage.getItem(LEGACY_BOOKINGS_KEY);
+      if (oldBookings) try { localStorage.setItem(bookingsKey(id), oldBookings); } catch {}
+      const state = { profiles: [merged], activeId: id };
+      try { localStorage.setItem(PROFILES_KEY, JSON.stringify(state)); } catch {}
+      return state;
+    }
+  } catch {}
+  return null;
+}
+
+export function saveProfilesState(state) {
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(state)); } catch {}
+}
+
+export function createDefaultProfile(name = "新しい影武者") {
+  return { ...DEFAULT_PROFILE, id: generateId(), name, greeting: "こんにちは。お話を聞かせてください。" };
 }
 
 export function isLiveAt(profile, date = new Date()) {

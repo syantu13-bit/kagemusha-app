@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { CHAT_KEY, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown } from "../lib";
+import { chatKey, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown } from "../lib";
 import { Markdown } from "../markdown";
 import { ts } from "../styles";
 
@@ -38,21 +38,32 @@ export default function ChatTab({ profile, initials }) {
   const [searchQuery, setSearchQuery] = useState("");
   const bottomRef = useRef(null);
 
+  // プロフィール切替時に履歴を再読込
   useEffect(() => {
+    setHydrated(false);
     try {
-      const s = localStorage.getItem(CHAT_KEY);
+      const s = localStorage.getItem(chatKey(profile.id));
       if (s) {
         const parsed = JSON.parse(s);
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        } else {
+          setMessages([greetingMsg()]);
+        }
+      } else {
+        setMessages([greetingMsg()]);
       }
-    } catch {}
+    } catch {
+      setMessages([greetingMsg()]);
+    }
     setHydrated(true);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id]);
 
   useEffect(() => {
     if (!hydrated) return;
-    try { localStorage.setItem(CHAT_KEY, JSON.stringify(messages)); } catch {}
-  }, [messages, hydrated]);
+    try { localStorage.setItem(chatKey(profile.id), JSON.stringify(messages)); } catch {}
+  }, [messages, hydrated, profile.id]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 

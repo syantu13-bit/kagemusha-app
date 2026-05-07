@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  BOOKINGS_KEY, SLOTS_DEMO, MONTHS_JP, WEEKDAYS,
+  bookingsKey, SLOTS_DEMO, MONTHS_JP, WEEKDAYS,
   getDaysInMonth, getFirstDay, downloadFile, bookingsToCsv,
 } from "../lib";
 import { bk } from "../styles";
 
-export default function BookingTab({ isMobile }) {
+export default function BookingTab({ profile, isMobile }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -18,14 +18,20 @@ export default function BookingTab({ isMobile }) {
 
   useEffect(() => {
     try {
-      const s = localStorage.getItem(BOOKINGS_KEY);
-      if (s) setBookings(JSON.parse(s) || []);
-    } catch {}
-  }, []);
+      const s = localStorage.getItem(bookingsKey(profile.id));
+      setBookings(s ? (JSON.parse(s) || []) : []);
+    } catch { setBookings([]); }
+    // 切替時にステップを初期化
+    setStep("cal");
+    setDay(null);
+    setSlot(null);
+    setForm({ name: "", email: "", worry: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id]);
 
   function persistBookings(next) {
     setBookings(next);
-    try { localStorage.setItem(BOOKINGS_KEY, JSON.stringify(next)); } catch {}
+    try { localStorage.setItem(bookingsKey(profile.id), JSON.stringify(next)); } catch {}
   }
 
   function cancelBooking(idx) {
@@ -82,7 +88,7 @@ export default function BookingTab({ isMobile }) {
             </div>
             <button
               type="button"
-              onClick={() => downloadFile(`bookings-${todayKey}.csv`, bookingsToCsv(bookings), "text/csv;charset=utf-8")}
+              onClick={() => downloadFile(`bookings-${profile.name || "kagemusha"}-${todayKey}.csv`, bookingsToCsv(bookings), "text/csv;charset=utf-8")}
               aria-label="予約をCSVでエクスポート"
               style={{
                 background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
