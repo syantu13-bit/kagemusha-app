@@ -4,6 +4,26 @@ import { CHAT_KEY, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messa
 import { Markdown } from "../markdown";
 import { ts } from "../styles";
 
+function highlightText(text, query) {
+  if (!query) return text;
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const out = [];
+  let i = 0, key = 0;
+  while (i < text.length) {
+    const idx = lowerText.indexOf(lowerQuery, i);
+    if (idx < 0) { out.push(text.slice(i)); break; }
+    if (idx > i) out.push(text.slice(i, idx));
+    out.push(
+      <mark key={key++} style={{ background: "rgba(245,158,11,0.4)", color: "#fde68a", borderRadius: 3, padding: "0 2px" }}>
+        {text.slice(idx, idx + query.length)}
+      </mark>
+    );
+    i = idx + query.length;
+  }
+  return out;
+}
+
 export default function ChatTab({ profile, initials }) {
   const greetingMsg = () => ({
     role: "assistant",
@@ -14,6 +34,8 @@ export default function ChatTab({ profile, initials }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -89,6 +111,14 @@ export default function ChatTab({ profile, initials }) {
       {messages.length > 1 && (
         <div style={{ ...ts.toolbar, gap: 8 }}>
           <button
+            style={{ ...ts.clearBtn, ...(searchOpen ? { color: "#c4b5fd", borderColor: "rgba(167,139,250,0.4)" } : {}) }}
+            onClick={() => { setSearchOpen(o => !o); if (searchOpen) setSearchQuery(""); }}
+            aria-label="会話を検索"
+            aria-pressed={searchOpen}
+          >
+            🔍 検索
+          </button>
+          <button
             style={ts.clearBtn}
             onClick={() => {
               const stamp = new Date().toISOString().slice(0, 10);
@@ -103,31 +133,63 @@ export default function ChatTab({ profile, initials }) {
           </button>
         </div>
       )}
-      <div style={ts.messages}>
-        {messages.map((m, i) => {
-          const bubbleStyle = m.role === "user"
-            ? ts.bubbleUser
-            : m.error
-              ? { ...ts.bubbleAI, ...ts.bubbleError }
-              : m.safety
-                ? { ...ts.bubbleAI, ...ts.bubbleSafety }
-                : ts.bubbleAI;
-          return (
-            <div key={i} style={{ ...ts.row, flexDirection: m.role === "user" ? "row-reverse" : "row", animation: "fadeInUp 0.3s ease" }}>
-              {m.role === "assistant" && (
-                <div style={{ ...ts.msgAvatar, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})` }}>{initials}</div>
-              )}
-              <div>
-                <div style={{ ...ts.bubble, ...bubbleStyle }}>
-                  {m.role === "assistant"
-                    ? <Markdown>{m.content}</Markdown>
-                    : m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
-                </div>
-                <div style={{ ...ts.time, textAlign: m.role === "user" ? "right" : "left" }}>{m.time}</div>
-              </div>
+      {searchOpen && (
+        <div style={{ padding: "8px 24px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+          <input
+            type="search"
+            autoFocus
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="会話内を検索…"
+            aria-label="検索キーワード"
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10,
+              padding: "8px 12px", color: "#f1f0ff", fontSize: 13, fontFamily: "inherit",
+            }}
+          />
+          {searchQuery.trim() && (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", paddingLeft: 4 }}>
+              {(() => {
+                const q = searchQuery.toLowerCase();
+                const hits = messages.filter(m => m.content.toLowerCase().includes(q)).length;
+                return hits > 0 ? `${hits} 件ヒット` : "ヒットなし";
+              })()}
             </div>
-          );
-        })}
+          )}
+        </div>
+      )}
+      <div style={ts.messages}>
+        {(() => {
+          const q = searchOpen ? searchQuery.trim().toLowerCase() : "";
+          const visible = q ? messages.filter(m => m.content.toLowerCase().includes(q)) : messages;
+          return visible.map((m, i) => {
+            const bubbleStyle = m.role === "user"
+              ? ts.bubbleUser
+              : m.error
+                ? { ...ts.bubbleAI, ...ts.bubbleError }
+                : m.safety
+                  ? { ...ts.bubbleAI, ...ts.bubbleSafety }
+                  : ts.bubbleAI;
+            return (
+              <div key={i} style={{ ...ts.row, flexDirection: m.role === "user" ? "row-reverse" : "row", animation: "fadeInUp 0.3s ease" }}>
+                {m.role === "assistant" && (
+                  <div style={{ ...ts.msgAvatar, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})` }}>{initials}</div>
+                )}
+                <div>
+                  <div style={{ ...ts.bubble, ...bubbleStyle }}>
+                    {q
+                      ? highlightText(m.content, q)
+                      : m.role === "assistant"
+                        ? <Markdown>{m.content}</Markdown>
+                        : m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
+                  </div>
+                  <div style={{ ...ts.time, textAlign: m.role === "user" ? "right" : "left" }}>{m.time}</div>
+                </div>
+              </div>
+            );
+          });
+        })()}
         {loading && (
           <div style={{ ...ts.row }}>
             <div style={{ ...ts.msgAvatar, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})` }}>{initials}</div>
