@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   COLOR_PRESETS, STYLE_OPTIONS, LANG_OPTIONS, BG_PRESETS, DEFAULT_PROFILE,
   buildSystemPrompt, downloadFile,
@@ -31,7 +31,17 @@ export default function AdminTab({
   const [tab, setTab] = useState(0);
   const [savedFlash, setSavedFlash] = useState(false);
   const [prev, setPrev] = useState({ msg: "", reply: "", loading: false });
+  const [health, setHealth] = useState(null); // null=未確認 | {ok, checks}
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health")
+      .then(r => r.json().then(d => ({ ok: r.ok, ...d })))
+      .then(d => { if (!cancelled) setHealth(d); })
+      .catch(() => { if (!cancelled) setHealth({ ok: false, checks: {} }); });
+    return () => { cancelled = true; };
+  }, []);
 
   function exportProfile() {
     const stamp = new Date().toISOString().slice(0, 10);
@@ -196,6 +206,27 @@ export default function AdminTab({
             }}>
             🗑 この影武者を削除
           </button>
+        )}
+        {health !== null && (
+          <div
+            title={
+              health.ok
+                ? "Anthropic APIキーが設定されています"
+                : !health.checks?.env_ANTHROPIC_API_KEY_present
+                  ? "ANTHROPIC_API_KEY が設定されていません"
+                  : !health.checks?.env_ANTHROPIC_API_KEY_format
+                    ? "ANTHROPIC_API_KEY の形式が不正です（sk- で始まる必要があります）"
+                    : "API接続を確認できません"
+            }
+            style={{
+              width: "100%", marginTop: 8, padding: "5px 8px",
+              fontSize: 10, textAlign: "center", borderRadius: 6,
+              background: health.ok ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${health.ok ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
+              color: health.ok ? "#86efac" : "#fca5a5",
+            }}>
+            {health.ok ? "🟢 API設定OK" : "🔴 API設定エラー"}
+          </div>
         )}
       </div>
 
