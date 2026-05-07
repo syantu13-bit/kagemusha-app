@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   DEFAULT_PROFILE, useIsMobile, isLiveAt, getThemeBg,
   loadProfilesState, saveProfilesState, createDefaultProfile,
-  generateId, chatKey, bookingsKey,
+  chatKey, bookingsKey, getProfileStats,
 } from "./lib";
 import { cs } from "./styles";
 import ChatTab from "./components/ChatTab";
@@ -109,31 +109,45 @@ export default function App() {
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", padding: "6px 10px 4px", textTransform: "uppercase" }}>
                     影武者を切替 ({profiles.length})
                   </div>
-                  {profiles.map(p => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      role="menuitem"
-                      onClick={() => selectProfile(p.id)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10, width: "100%",
-                        padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-                        border: "none", textAlign: "left", fontFamily: "inherit",
-                        background: p.id === activeId ? "rgba(124,58,237,0.18)" : "transparent",
-                        color: "#f1f0ff",
-                      }}>
-                      <span style={{
-                        width: 28, height: 28, borderRadius: "50%",
-                        background: `linear-gradient(135deg,${p.avatarColor1},${p.avatarColor2})`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 700, fontFamily: "'Noto Serif JP',serif",
-                      }}>{(p.name || "?")[0].toUpperCase()}</span>
-                      <span style={{ flex: 1, fontSize: 13, fontWeight: p.id === activeId ? 600 : 400 }}>
-                        {p.name}
-                      </span>
-                      {p.id === activeId && <span style={{ color: "#a78bfa", fontSize: 11 }}>選択中</span>}
-                    </button>
-                  ))}
+                  {profiles.map(p => {
+                    const stats = getProfileStats(p.id);
+                    const meta = [];
+                    if (stats.messageCount > 0) meta.push(`💬${stats.messageCount}`);
+                    if (stats.bookingCount > 0) meta.push(`📅${stats.bookingCount}`);
+                    return (
+                      <button
+                        type="button"
+                        key={p.id}
+                        role="menuitem"
+                        onClick={() => selectProfile(p.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, width: "100%",
+                          padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                          border: "none", textAlign: "left", fontFamily: "inherit",
+                          background: p.id === activeId ? "rgba(124,58,237,0.18)" : "transparent",
+                          color: "#f1f0ff",
+                        }}>
+                        <span style={{
+                          width: 28, height: 28, borderRadius: "50%",
+                          background: `linear-gradient(135deg,${p.avatarColor1},${p.avatarColor2})`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 13, fontWeight: 700, fontFamily: "'Noto Serif JP',serif",
+                          flexShrink: 0,
+                        }}>{(p.name || "?")[0].toUpperCase()}</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: "block", fontSize: 13, fontWeight: p.id === activeId ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {p.name}
+                          </span>
+                          {meta.length > 0 && (
+                            <span style={{ display: "block", fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 1 }}>
+                              {meta.join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                        {p.id === activeId && <span style={{ color: "#a78bfa", fontSize: 11 }}>選択中</span>}
+                      </button>
+                    );
+                  })}
                   <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "6px 4px" }} />
                   <button
                     type="button"

@@ -175,6 +175,29 @@ export function createDefaultProfile(name = "新しい影武者") {
   return { ...DEFAULT_PROFILE, id: generateId(), name, greeting: "こんにちは。お話を聞かせてください。" };
 }
 
+// プロフィールIDから会話・予約のメタデータを取得（件数と最終更新）
+export function getProfileStats(profileId) {
+  if (typeof window === "undefined") return { messageCount: 0, lastMessageAt: null, bookingCount: 0 };
+  let messageCount = 0, lastMessageAt = null, bookingCount = 0;
+  try {
+    const c = localStorage.getItem(chatKey(profileId));
+    if (c) {
+      const arr = JSON.parse(c);
+      if (Array.isArray(arr)) {
+        // 挨拶メッセージのみ（=1件で全部assistant）の場合は0扱い
+        messageCount = arr.length <= 1 ? 0 : arr.length;
+      }
+    }
+    const b = localStorage.getItem(bookingsKey(profileId));
+    if (b) {
+      const arr = JSON.parse(b);
+      if (Array.isArray(arr)) bookingCount = arr.length;
+    }
+  } catch {}
+  return { messageCount, bookingCount };
+}
+
+
 export function isLiveAt(profile, date = new Date()) {
   const cur = date.getHours() * 60 + date.getMinutes();
   return profile.activeHours.some(slot => {
