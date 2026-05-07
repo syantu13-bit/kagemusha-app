@@ -211,12 +211,10 @@ export default function AdminTab({
           <div
             title={
               health.ok
-                ? "Anthropic APIキーが設定されています"
-                : !health.checks?.env_ANTHROPIC_API_KEY_present
-                  ? "ANTHROPIC_API_KEY が設定されていません"
-                  : !health.checks?.env_ANTHROPIC_API_KEY_format
-                    ? "ANTHROPIC_API_KEY の形式が不正です（sk- で始まる必要があります）"
-                    : "API接続を確認できません"
+                ? "Gemini APIキーが設定されています"
+                : !health.checks?.env_GEMINI_API_KEY_present
+                  ? "GEMINI_API_KEY が設定されていません"
+                  : "API接続を確認できません"
             }
             style={{
               width: "100%", marginTop: 8, padding: "5px 8px",
