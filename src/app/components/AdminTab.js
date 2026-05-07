@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
-  COLOR_PRESETS, STYLE_OPTIONS, LANG_OPTIONS, BG_PRESETS,
-  buildSystemPrompt,
+  COLOR_PRESETS, STYLE_OPTIONS, LANG_OPTIONS, BG_PRESETS, DEFAULT_PROFILE,
+  buildSystemPrompt, downloadFile,
 } from "../lib";
+import { Markdown } from "../markdown";
 import { ad, baseInput } from "../styles";
 
 const ADMIN_TABS = ["基本情報", "口調・スタイル", "対応時間", "プレビュー"];
@@ -27,6 +28,36 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
   const [tab, setTab] = useState(0);
   const [savedFlash, setSavedFlash] = useState(false);
   const [prev, setPrev] = useState({ msg: "", reply: "", loading: false });
+  const fileInputRef = useRef(null);
+
+  function exportProfile() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadFile(
+      `kagemusha-profile-${profile.name || "default"}-${stamp}.json`,
+      JSON.stringify(profile, null, 2),
+      "application/json;charset=utf-8"
+    );
+  }
+
+  async function importProfile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || typeof parsed.name !== "string") {
+        alert("無効なファイルです（プロフィールJSONではありません）");
+        return;
+      }
+      if (!confirm(`「${parsed.name}」の設定を読み込んで現在の設定を上書きしますか？`)) return;
+      setProfile({ ...DEFAULT_PROFILE, ...parsed });
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1500);
+    } catch {
+      alert("ファイルの読み込みに失敗しました（JSONとして解析できません）");
+    }
+  }
 
   function upd(k, v) {
     setProfile({ ...profile, [k]: v });
@@ -82,6 +113,38 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
             transition: "background 0.3s, box-shadow 0.3s",
           }}>
           {savedFlash ? "✓ 保存しました" : "🟢 変更は自動保存されます"}
+        </div>
+        <div style={{ display: "flex", gap: 6, width: "100%", marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={exportProfile}
+            aria-label="プロフィールをエクスポート"
+            style={{
+              flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+              color: "#c4b5fd", borderRadius: 8, padding: "6px 8px",
+              fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+            }}>
+            📤 出力
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="プロフィールをインポート"
+            style={{
+              flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+              color: "#c4b5fd", borderRadius: 8, padding: "6px 8px",
+              fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+            }}>
+            📥 読込
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={importProfile}
+            style={{ display: "none" }}
+            aria-hidden="true"
+          />
         </div>
       </div>
 
@@ -243,7 +306,7 @@ export default function AdminTab({ profile, setProfile, initials, isMobile }) {
                       {(profile.name || "K")[0]}
                     </div>
                     <div style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#e8e6f0", lineHeight: 1.7, maxWidth: 360 }}>
-                      {prev.reply}
+                      <Markdown>{prev.reply}</Markdown>
                     </div>
                   </div>
                 )}

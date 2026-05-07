@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { CHAT_KEY, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown } from "../lib";
+import { Markdown } from "../markdown";
 import { ts } from "../styles";
 
 export default function ChatTab({ profile, initials }) {
@@ -118,7 +119,9 @@ export default function ChatTab({ profile, initials }) {
               )}
               <div>
                 <div style={{ ...ts.bubble, ...bubbleStyle }}>
-                  {m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
+                  {m.role === "assistant"
+                    ? <Markdown>{m.content}</Markdown>
+                    : m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
                 </div>
                 <div style={{ ...ts.time, textAlign: m.role === "user" ? "right" : "left" }}>{m.time}</div>
               </div>
