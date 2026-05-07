@@ -3,10 +3,13 @@
 AIと本人が答える、あなただけの相談チャットサービス。
 
 ## 機能
-- 💬 AI影武者チャット（Claude APIが自動応答）
+- 💬 AI影武者チャット（Google Gemini APIが自動応答・無料枠で運用可能）
 - 📅 本人対応枠の予約カレンダー
-- 🎭 キャラクター設定管理画面
+- 🎭 キャラクター設定管理画面（複数の影武者を切替可能）
 - 🕐 時間帯で本人/AI自動切り替え
+- 🔍 会話履歴の検索・Markdown エクスポート
+- 🎨 5種類の背景テーマ
+- 🔔 予約30分前のブラウザ通知
 
 ---
 
@@ -34,16 +37,18 @@ git push -u origin main
 1. https://vercel.com にアクセス（GitHubアカウントでログイン）
 2. 「Add New Project」→ GitHubのリポジトリを選択
 3. 「Environment Variables」に以下を追加：
-   - Name: `ANTHROPIC_API_KEY`
-   - Value: `sk-ant-...`（Anthropicのダッシュボードから取得）
+   - Name: `GEMINI_API_KEY`
+   - Value: `AIza...`（Google AI Studioから取得）
 4. 「Deploy」ボタンを押す
 
 → 1〜2分でURLが発行されます 🎉
 
 ### ④ APIキーの取得（まだ持っていない場合）
-1. https://console.anthropic.com にアクセス
-2. 「API Keys」→「Create Key」
-3. 発行されたキーをVercelの環境変数に貼り付ける
+1. https://aistudio.google.com/apikey にアクセス（Google アカウントでログイン）
+2. 「Create API key」→ プロジェクトを選択（または新規作成）
+3. 発行されたキー（`AIza...` で始まる）をVercelの環境変数に貼り付ける
+
+**Gemini API は無料枠が広いので、個人開発・試作中は完全無料で運用できます。**
 
 ---
 
