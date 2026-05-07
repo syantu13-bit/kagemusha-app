@@ -37,6 +37,7 @@ export default function ChatTab({ profile, initials }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const bottomRef = useRef(null);
+  const abortRef = useRef(null);
 
   // プロフィール切替時に履歴を再読込
   useEffect(() => {
@@ -96,6 +97,8 @@ export default function ChatTab({ profile, initials }) {
     }
 
     setLoading(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -104,6 +107,7 @@ export default function ChatTab({ profile, initials }) {
           system: buildSystemPrompt(profile),
           messages: next.map(m => ({ role: m.role, content: m.content })),
         }),
+        signal: ctrl.signal,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -112,9 +116,20 @@ export default function ChatTab({ profile, initials }) {
       }
       const reply = data.content?.[0]?.text || "少し考えさせてください…";
       setMessages(p => [...p, { role: "assistant", content: reply, time: nowTime() }]);
-    } catch {
-      setMessages(p => [...p, { role: "assistant", content: "接続が不安定です。もう一度お試しください。", time: nowTime(), error: true }]);
-    } finally { setLoading(false); }
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        setMessages(p => [...p, { role: "assistant", content: "（送信を中断しました）", time: nowTime(), safety: true }]);
+      } else {
+        setMessages(p => [...p, { role: "assistant", content: "接続が不安定です。もう一度お試しください。", time: nowTime(), error: true }]);
+      }
+    } finally {
+      setLoading(false);
+      abortRef.current = null;
+    }
+  }
+
+  function cancelSend() {
+    abortRef.current?.abort();
   }
 
   return (
@@ -230,9 +245,19 @@ export default function ChatTab({ profile, initials }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />
-        <button style={{ ...ts.sendBtn, opacity: (!input.trim() || loading) ? 0.35 : 1 }} onClick={() => send()} disabled={!input.trim() || loading}>
-          送信
-        </button>
+        {loading ? (
+          <button
+            style={{ ...ts.sendBtn, background: "linear-gradient(135deg,#dc2626,#9333ea)", boxShadow: "0 4px 14px rgba(220,38,38,0.3)" }}
+            onClick={cancelSend}
+            aria-label="送信を中断"
+          >
+            ⏹ 中断
+          </button>
+        ) : (
+          <button style={{ ...ts.sendBtn, opacity: !input.trim() ? 0.35 : 1 }} onClick={() => send()} disabled={!input.trim()}>
+            送信
+          </button>
+        )}
       </div>
       <div style={ts.footer}>Enter で送信 · Shift+Enter で改行</div>
     </div>
