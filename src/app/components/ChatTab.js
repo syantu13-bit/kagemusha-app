@@ -114,8 +114,14 @@ export default function ChatTab({ profile, initials }) {
         setMessages(p => [...p, { role: "assistant", content: `応答エラー: ${data.error || "不明なエラー"}`, time: nowTime(), error: true }]);
         return;
       }
-      const reply = data.content?.[0]?.text || "少し考えさせてください…";
-      setMessages(p => [...p, { role: "assistant", content: reply, time: nowTime() }]);
+      const textBlock = Array.isArray(data?.content) ? data.content.find(c => c?.type === "text") : null;
+      const reply = textBlock?.text;
+      if (reply) {
+        setMessages(p => [...p, { role: "assistant", content: reply, time: nowTime() }]);
+      } else {
+        const debug = `応答が空でした（stop_reason: ${data?.stop_reason ?? "不明"}）`;
+        setMessages(p => [...p, { role: "assistant", content: debug, time: nowTime(), error: true }]);
+      }
     } catch (err) {
       if (err?.name === "AbortError") {
         setMessages(p => [...p, { role: "assistant", content: "（送信を中断しました）", time: nowTime(), safety: true }]);

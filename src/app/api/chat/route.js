@@ -32,20 +32,21 @@ export async function POST(req) {
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
         max_tokens: 1024,
-
-        system: [
-          { type: "text", text: system, cache_control: { type: "ephemeral" } },
-        ],
+        system,
         messages,
       }),
     });
 
     const data = await res.json();
     if (!res.ok) {
+      console.error("[chat] upstream error", res.status, data);
       return Response.json(
         { error: data?.error?.message || "Upstream API error", details: data },
         { status: res.status }
       );
+    }
+    if (!data?.content?.[0]?.text) {
+      console.warn("[chat] empty content", { stop_reason: data?.stop_reason, content: data?.content });
     }
     return Response.json(data);
   } catch (err) {
