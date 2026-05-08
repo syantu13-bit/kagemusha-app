@@ -83,6 +83,31 @@ export const bk = {
   doneRow:{display:"flex",justifyContent:"space-between",fontSize:13},
 };
 
+export const dv = {
+  // インラインアクション（AIバブル下）
+  actionRow:{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"},
+  actionBtn:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",border:"none",color:"#fff",padding:"7px 16px",borderRadius:18,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 10px rgba(124,58,237,0.35)"},
+  actionBtnSec:{background:"transparent",border:"1px solid rgba(255,255,255,0.18)",color:"rgba(255,255,255,0.55)",padding:"7px 14px",borderRadius:18,fontSize:12,cursor:"pointer",fontFamily:"inherit"},
+  // フォーム
+  formCard:{background:"rgba(124,58,237,0.06)",border:"1px solid rgba(124,58,237,0.22)",borderRadius:14,padding:"14px 18px",margin:"4px 24px 8px",display:"flex",flexDirection:"column",gap:10},
+  formTitle:{fontSize:13,color:"#c4b5fd",fontFamily:"'Noto Serif JP',serif",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"space-between"},
+  formGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8},
+  formField:{display:"flex",flexDirection:"column",gap:4},
+  formLabel:{fontSize:10,color:"rgba(255,255,255,0.5)"},
+  formInput:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"7px 10px",color:"#f1f0ff",fontSize:12,fontFamily:"inherit",colorScheme:"dark",width:"100%"},
+  formActions:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4},
+  // 結果カード
+  card:{background:"linear-gradient(135deg,rgba(124,58,237,0.18),rgba(37,99,235,0.12))",border:"1px solid rgba(167,139,250,0.4)",borderRadius:14,padding:"16px 20px",maxWidth:420,boxShadow:"0 4px 24px rgba(124,58,237,0.25)",animation:"fadeInUp 0.4s ease"},
+  cardType:{fontSize:10,color:"#a78bfa",letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:6,fontWeight:600},
+  cardTitle:{fontFamily:"'Noto Serif JP',serif",fontSize:20,fontWeight:700,color:"#fde68a",margin:"0 0 4px",lineHeight:1.3},
+  cardSummary:{fontSize:13,color:"#c4b5fd",fontStyle:"italic",marginBottom:10,fontFamily:"'Noto Serif JP',serif"},
+  cardDetail:{fontSize:13,color:"#e8e6f0",lineHeight:1.75,marginBottom:10,whiteSpace:"pre-wrap"},
+  cardAdvice:{background:"rgba(0,0,0,0.25)",borderLeft:"2px solid #a78bfa",padding:"8px 12px",fontSize:12,color:"#fde68a",borderRadius:"0 8px 8px 0",lineHeight:1.6,marginTop:4},
+  cardExtras:{marginTop:12,display:"flex",flexWrap:"wrap",gap:6},
+  cardExtraChip:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"3px 9px",fontSize:11,color:"rgba(255,255,255,0.75)"},
+  cardExtraLabel:{color:"rgba(255,255,255,0.4)",marginRight:4},
+};
+
 export const ad = {
   wrap:{display:"flex",gap:20,padding:"20px 24px",flex:1,overflow:"auto"},
   wrapMobile:{flexDirection:"column",padding:"14px",gap:14},

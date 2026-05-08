@@ -1,8 +1,14 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { chatKey, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown } from "../lib";
+import {
+  chatKey, QUICK_TOPICS, nowTime, buildSystemPrompt, downloadFile, messagesToMarkdown,
+  PREFECTURES, DIVINATION_TYPES,
+  detectDivinationType, detectDivinationOffer,
+  loadConsultantInfo, saveConsultantInfo, isConsultantInfoComplete,
+  DEFAULT_CONSULTANT_INFO, callDivinationAPI,
+} from "../lib";
 import { Markdown } from "../markdown";
-import { ts } from "../styles";
+import { ts, dv } from "../styles";
 
 function highlightText(text, query) {
   if (!query) return text;
@@ -24,6 +30,85 @@ function highlightText(text, query) {
   return out;
 }
 
+function DivinationCard({ data }) {
+  if (!data) return null;
+  const typeLabel = DIVINATION_TYPES.find(t => t.id === data.type)?.label || data.type;
+  return (
+    <div style={dv.card}>
+      <div style={dv.cardType}>◌ {typeLabel}</div>
+      <h3 style={dv.cardTitle}>{data.title}</h3>
+      {data.summary && <div style={dv.cardSummary}>{data.summary}</div>}
+      {data.detail && <div style={dv.cardDetail}>{data.detail}</div>}
+      {data.advice && <div style={dv.cardAdvice}>◇ {data.advice}</div>}
+      {Array.isArray(data.extras) && data.extras.length > 0 && (
+        <div style={dv.cardExtras}>
+          {data.extras.map((e, i) => (
+            <span key={i} style={dv.cardExtraChip}>
+              <span style={dv.cardExtraLabel}>{e.label}：</span>{e.value}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConsultantForm({ info, onChange, onSubmit, onClose, submitLabel = "🔮 占いを引く" }) {
+  const update = (k, v) => onChange({ ...info, [k]: v });
+  const ready = isConsultantInfoComplete(info);
+  return (
+    <div style={dv.formCard}>
+      <div style={dv.formTitle}>
+        <span>📋 占いに必要な情報</span>
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label="閉じる" style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+        )}
+      </div>
+      <div style={dv.formGrid}>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>姓（任意）</label>
+          <input style={dv.formInput} value={info.lastName} onChange={e => update("lastName", e.target.value)} placeholder="富田" />
+        </div>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>名（任意）</label>
+          <input style={dv.formInput} value={info.firstName} onChange={e => update("firstName", e.target.value)} placeholder="尚子" />
+        </div>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>生年月日 ★</label>
+          <input type="date" style={dv.formInput} value={info.birthdate} onChange={e => update("birthdate", e.target.value)} />
+        </div>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>時刻（不明なら12:00）</label>
+          <input type="time" style={dv.formInput} value={info.time} onChange={e => update("time", e.target.value)} />
+        </div>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>都道府県 ★</label>
+          <select style={dv.formInput} value={info.prefecture} onChange={e => update("prefecture", e.target.value)}>
+            {PREFECTURES.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div style={dv.formField}>
+          <label style={dv.formLabel}>性別 ★</label>
+          <select style={dv.formInput} value={info.gender} onChange={e => update("gender", e.target.value)}>
+            <option value="female">女性</option>
+            <option value="male">男性</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+      </div>
+      <div style={dv.formActions}>
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!ready}
+          style={{ ...dv.actionBtn, opacity: ready ? 1 : 0.4, cursor: ready ? "pointer" : "not-allowed" }}>
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatTab({ profile, initials }) {
   const greetingMsg = () => ({
     role: "assistant",
@@ -36,6 +121,10 @@ export default function ChatTab({ profile, initials }) {
   const [hydrated, setHydrated] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [consultantInfo, setConsultantInfo] = useState(DEFAULT_CONSULTANT_INFO);
+  const [formOpen, setFormOpen] = useState(false);
+  const [pendingType, setPendingType] = useState(null);
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const bottomRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -56,18 +145,23 @@ export default function ChatTab({ profile, initials }) {
     } catch {
       setMessages([greetingMsg()]);
     }
+    const info = loadConsultantInfo(profile.id);
+    setConsultantInfo(info || DEFAULT_CONSULTANT_INFO);
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
 
   useEffect(() => {
     if (!hydrated) return;
-    // ストリーミング中のメッセージは保存しない
     const toSave = messages.map(m => ({ ...m, streaming: false }));
     try { localStorage.setItem(chatKey(profile.id), JSON.stringify(toSave)); } catch {}
   }, [messages, hydrated, profile.id]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  useEffect(() => {
+    if (hydrated) saveConsultantInfo(profile.id, consultantInfo);
+  }, [consultantInfo, hydrated, profile.id]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading, formOpen]);
 
   function clearChat() {
     if (!confirm("会話履歴をリセットしますか？")) return;
@@ -77,6 +171,13 @@ export default function ChatTab({ profile, initials }) {
   function ngHit(text) {
     const list = (profile.ngWords || "").split(",").map(s => s.trim()).filter(Boolean);
     return list.find(w => text.includes(w));
+  }
+
+  // AIに送るための履歴（hidden を含む、divination は除外）
+  function apiHistory(extra = []) {
+    return [...messages, ...extra]
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role, content: m.content }));
   }
 
   async function send(text) {
@@ -102,12 +203,16 @@ export default function ChatTab({ profile, initials }) {
     abortRef.current = ctrl;
 
     try {
+      const apiMessages = next
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => ({ role: m.role, content: m.content }));
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system: buildSystemPrompt(profile),
-          messages: next.map(m => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
         }),
         signal: ctrl.signal,
       });
@@ -119,7 +224,6 @@ export default function ChatTab({ profile, initials }) {
         return;
       }
 
-      // ストリーミングテキストを逐次読み込む
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
@@ -135,10 +239,10 @@ export default function ChatTab({ profile, initials }) {
           firstChunk = false;
           setMessages(p => [...p, { role: "assistant", content: accumulated, time: msgTime, streaming: true }]);
         } else {
-          const text = accumulated;
+          const text2 = accumulated;
           setMessages(p => {
             const prev = [...p];
-            prev[prev.length - 1] = { ...prev[prev.length - 1], content: text };
+            prev[prev.length - 1] = { ...prev[prev.length - 1], content: text2 };
             return prev;
           });
         }
@@ -189,6 +293,88 @@ export default function ChatTab({ profile, initials }) {
     abortRef.current?.abort();
   }
 
+  // 占いを実行
+  async function performDivination(typeId) {
+    if (!isConsultantInfoComplete(consultantInfo)) {
+      setPendingType(typeId);
+      setFormOpen(true);
+      return;
+    }
+
+    setLoading(true);
+    let result;
+    try {
+      result = await callDivinationAPI(typeId, consultantInfo);
+    } catch (err) {
+      setMessages(p => [...p, {
+        role: "assistant",
+        content: `占い結果を取得できませんでした。\n\nlocalhost:5500 が起動しているか、CORS（Access-Control-Allow-Origin）が許可されているか確認してください。\n\nエラー: ${err.message}`,
+        time: nowTime(),
+        error: true,
+      }]);
+      setLoading(false);
+      return;
+    }
+
+    const divMsg = { role: "divination", content: result, time: nowTime() };
+    const triggerMsg = {
+      role: "user",
+      content: `（占い結果が画面に表示されました）
+占術: ${DIVINATION_TYPES.find(t => t.id === result.type)?.label || result.type}
+タイトル: ${result.title}
+${result.summary ? `概要: ${result.summary}\n` : ""}${result.detail ? `詳細: ${result.detail}\n` : ""}${result.advice ? `アドバイス: ${result.advice}` : ""}
+
+この結果を踏まえて、${profile.name}の言葉で相談者に解釈を伝えてください。`,
+      time: nowTime(),
+      hidden: true,
+    };
+    const nextMessages = [...messages, divMsg, triggerMsg];
+    setMessages(nextMessages);
+
+    // AIに解釈を依頼
+    try {
+      const apiMessages = nextMessages
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system: buildSystemPrompt(profile), messages: apiMessages }),
+      });
+      if (!res.ok) throw new Error("AI解釈の取得に失敗しました");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+      }
+      setMessages(p => [...p, { role: "assistant", content: text || "解釈を取得できませんでした", time: nowTime() }]);
+    } catch {
+      setMessages(p => [...p, { role: "assistant", content: "AIによる解釈の取得に失敗しました。", time: nowTime(), error: true }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSubmitForm() {
+    setFormOpen(false);
+    if (pendingType) {
+      const t = pendingType;
+      setPendingType(null);
+      performDivination(t);
+    }
+  }
+
+  function handleDeclineDivination() {
+    send("（今は遠慮します。別の話を続けたい）");
+  }
+
+  // 表示用メッセージ（hidden を除外）
+  const renderable = messages.filter(m => !m.hidden);
+  const lastRenderable = renderable[renderable.length - 1];
   const isStreaming = messages.some(m => m.streaming);
 
   return (
@@ -207,7 +393,7 @@ export default function ChatTab({ profile, initials }) {
             style={ts.clearBtn}
             onClick={() => {
               const stamp = new Date().toISOString().slice(0, 10);
-              downloadFile(`chat-${profile.name || "kagemusha"}-${stamp}.md`, messagesToMarkdown(messages, profile.name || "影武者"), "text/markdown;charset=utf-8");
+              downloadFile(`chat-${profile.name || "kagemusha"}-${stamp}.md`, messagesToMarkdown(messages.filter(m => !m.hidden && m.role !== "divination"), profile.name || "影武者"), "text/markdown;charset=utf-8");
             }}
             aria-label="会話をマークダウンでエクスポート"
           >
@@ -237,7 +423,7 @@ export default function ChatTab({ profile, initials }) {
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", paddingLeft: 4 }}>
               {(() => {
                 const q = searchQuery.toLowerCase();
-                const hits = messages.filter(m => m.content.toLowerCase().includes(q)).length;
+                const hits = renderable.filter(m => typeof m.content === "string" && m.content.toLowerCase().includes(q)).length;
                 return hits > 0 ? `${hits} 件ヒット` : "ヒットなし";
               })()}
             </div>
@@ -247,8 +433,22 @@ export default function ChatTab({ profile, initials }) {
       <div style={ts.messages}>
         {(() => {
           const q = searchOpen ? searchQuery.trim().toLowerCase() : "";
-          const visible = q ? messages.filter(m => m.content.toLowerCase().includes(q)) : messages;
+          const visible = q
+            ? renderable.filter(m => typeof m.content === "string" && m.content.toLowerCase().includes(q))
+            : renderable;
           return visible.map((m, i) => {
+            // 占い結果カード
+            if (m.role === "divination") {
+              return (
+                <div key={i} style={{ ...ts.row, animation: "fadeInUp 0.3s ease" }}>
+                  <div style={{ ...ts.msgAvatar, background: "linear-gradient(135deg,#fde68a,#a78bfa)", color: "#1a0e2e" }}>占</div>
+                  <div>
+                    <DivinationCard data={m.content} />
+                    <div style={{ ...ts.time }}>{m.time}</div>
+                  </div>
+                </div>
+              );
+            }
             const bubbleStyle = m.role === "user"
               ? ts.bubbleUser
               : m.error
@@ -256,6 +456,13 @@ export default function ChatTab({ profile, initials }) {
                 : m.safety
                   ? { ...ts.bubbleAI, ...ts.bubbleSafety }
                   : ts.bubbleAI;
+
+            // この AI 返答が占いの提案で、最後の表示メッセージなら、アクションボタンを出す
+            const isLastRenderable = m === lastRenderable;
+            const offer = m.role === "assistant" && !m.error && !m.safety && detectDivinationOffer(m.content || "");
+            const offerType = offer ? detectDivinationType(m.content || "") : null;
+            const showActions = offer && isLastRenderable && !loading;
+
             return (
               <div key={i} style={{ ...ts.row, flexDirection: m.role === "user" ? "row-reverse" : "row", animation: "fadeInUp 0.3s ease" }}>
                 {m.role === "assistant" && (
@@ -271,6 +478,24 @@ export default function ChatTab({ profile, initials }) {
                             {m.streaming && <span style={ts.cursor} aria-hidden="true">▋</span>}
                           </>
                         : m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
+                    {showActions && (
+                      <div style={dv.actionRow}>
+                        <button
+                          type="button"
+                          style={dv.actionBtn}
+                          onClick={() => performDivination(offerType?.id || "tarot")}
+                        >
+                          🔮 {offerType?.label || "占いを引く"}で占う
+                        </button>
+                        <button
+                          type="button"
+                          style={dv.actionBtnSec}
+                          onClick={handleDeclineDivination}
+                        >
+                          遠慮します
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div style={{ ...ts.time, textAlign: m.role === "user" ? "right" : "left" }}>{m.time}</div>
                 </div>
@@ -278,7 +503,6 @@ export default function ChatTab({ profile, initials }) {
             );
           });
         })()}
-        {/* ストリーミング開始前のみドットを表示 */}
         {loading && !isStreaming && (
           <div style={{ ...ts.row }}>
             <div style={{ ...ts.msgAvatar, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})` }}>{initials}</div>
@@ -289,6 +513,37 @@ export default function ChatTab({ profile, initials }) {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* 占いフォーム */}
+      {formOpen && (
+        <ConsultantForm
+          info={consultantInfo}
+          onChange={setConsultantInfo}
+          onSubmit={handleSubmitForm}
+          onClose={() => { setFormOpen(false); setPendingType(null); }}
+        />
+      )}
+
+      {/* 占術選択 */}
+      {typePickerOpen && (
+        <div style={{ ...dv.formCard, padding: "10px 14px" }}>
+          <div style={{ ...dv.formTitle, marginBottom: 4 }}>
+            <span>🔮 どの占術で占いますか？</span>
+            <button type="button" onClick={() => setTypePickerOpen(false)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {DIVINATION_TYPES.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                style={{ ...dv.actionBtnSec, padding: "5px 12px" }}
+                onClick={() => { setTypePickerOpen(false); performDivination(t.id); }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {messages.length <= 1 && (
         <div style={ts.quickWrap}>
@@ -302,6 +557,18 @@ export default function ChatTab({ profile, initials }) {
       )}
 
       <div style={ts.inputRow}>
+        <button
+          type="button"
+          onClick={() => setTypePickerOpen(o => !o)}
+          aria-label="占いを引く"
+          title="占いを引く"
+          style={{
+            background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.4)",
+            color: "#c4b5fd", borderRadius: 12, padding: "0 12px",
+            fontSize: 18, cursor: "pointer", fontFamily: "inherit", height: 42, alignSelf: "flex-end",
+          }}>
+          🔮
+        </button>
         <textarea
           aria-label="悩みを入力"
           style={ts.textarea} rows={2} value={input} placeholder="悩みを入力してください…"
@@ -322,7 +589,7 @@ export default function ChatTab({ profile, initials }) {
           </button>
         )}
       </div>
-      <div style={ts.footer}>Enter で送信 · Shift+Enter で改行</div>
+      <div style={ts.footer}>Enter で送信 · Shift+Enter で改行 · 🔮 で占いを引く</div>
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
       `}</style>

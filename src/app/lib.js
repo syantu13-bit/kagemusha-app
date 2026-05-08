@@ -122,6 +122,92 @@ export const COLOR_PRESETS = [
 export const WEEKDAYS = ["日","月","火","水","木","金","土"];
 export const MONTHS_JP = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
+// ─── 占い ────────────────────────────────────────────
+export const PREFECTURES = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県",
+  "岐阜県","静岡県","愛知県","三重県",
+  "滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県",
+];
+
+export const DIVINATION_TYPES = [
+  { id: "tarot",  label: "タロット",     keywords: ["タロット"] },
+  { id: "seiyo",  label: "西洋占星術",   keywords: ["西洋占星術", "ホロスコープ", "星読み", "占星術"] },
+  { id: "kyusei", label: "九星気学",     keywords: ["九星気学", "九星"] },
+  { id: "sanmei", label: "算命学",       keywords: ["算命学"] },
+  { id: "eki",    label: "易学",         keywords: ["易学", "六十四卦", "卦", "易"] },
+  { id: "houi",   label: "方位学",       keywords: ["方位学", "方位"] },
+  { id: "seimei", label: "姓名判断",     keywords: ["姓名判断", "姓名"] },
+];
+
+export function detectDivinationType(text) {
+  if (!text) return null;
+  for (const t of DIVINATION_TYPES) {
+    if (t.keywords.some(kw => text.includes(kw))) return t;
+  }
+  return null;
+}
+
+export function detectDivinationOffer(text) {
+  if (!text) return false;
+  const patterns = [
+    "占ってみましょう", "占ってみますか", "占ってみては",
+    "視てみましょう", "視てみますか", "視てみては",
+    "占いを引きまし", "占いを引きますか",
+  ];
+  return patterns.some(p => text.includes(p));
+}
+
+export const consultantKey = (profileId) => `kagemusha_consultant_v1_${profileId}`;
+
+export const DEFAULT_CONSULTANT_INFO = {
+  lastName: "",
+  firstName: "",
+  birthdate: "",
+  time: "12:00",
+  prefecture: "東京都",
+  gender: "female",
+};
+
+export function loadConsultantInfo(profileId) {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(consultantKey(profileId));
+    if (raw) return { ...DEFAULT_CONSULTANT_INFO, ...JSON.parse(raw) };
+  } catch {}
+  return null;
+}
+
+export function saveConsultantInfo(profileId, info) {
+  try { localStorage.setItem(consultantKey(profileId), JSON.stringify(info)); } catch {}
+}
+
+export function isConsultantInfoComplete(info) {
+  return !!(info && info.birthdate && info.prefecture && info.gender);
+}
+
+export const DIVINATION_API_BASE = "http://localhost:5500";
+
+export async function callDivinationAPI(typeId, info) {
+  const params = new URLSearchParams({
+    type: typeId,
+    lastName: info.lastName || "",
+    firstName: info.firstName || "",
+    birthdate: info.birthdate,
+    time: info.time || "12:00",
+    prefecture: info.prefecture,
+    gender: info.gender,
+  });
+  const url = `${DIVINATION_API_BASE}/api/divine?${params.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`占いAPIエラー（${res.status}）`);
+  return await res.json();
+}
+
 // ─── ユーティリティ ──────────────────────────────────
 export function useIsMobile(breakpoint = 720) {
   const [isMobile, setIsMobile] = useState(false);
@@ -182,6 +268,15 @@ ${p.selfIntro}
 【話し方】${langMap[p.language] || langMap.polite}
 【応答スタイル】${styleMap[p.style] || styleMap.empathy_first}
 【返答の目安】${p.maxReplyLength}字以内、簡潔に${ngLine}
+
+【占術の活用】
+あなたは以下の占術にアクセスできます：タロット・西洋占星術・九星気学・算命学・易学・方位学・姓名判断。
+相談者の悩みに寄り添った後、適切な場面で占いを提案してください：
+- 強引に提案せず、相談者の話を十分に聞いた上で「○○で視てみましょうか」と自然に切り出す
+- **占術名は必ず1つだけ具体的に示す**（例：「易で視てみましょうか」「タロットで占ってみましょうか」「九星気学で今のあなたを視てみますか」）
+- 相談内容に応じて占術を選ぶ（例：未来への迷い→タロット、人生全体の流れ→算命学、選択の吉凶→易、人間関係の相性→西洋占星術など）
+- 占い結果が画面に表示されたら、その内容を踏まえて${p.name}らしい解釈を語る
+- 結果を機械的に読まず、相談者の悩みに引き寄せて意味を伝える
 
 このキャラクターの世界観・価値観・口調を一貫して保ち、自然な日本語で応えてください。
 キャラクターの専門外と思える質問にも、断らず、キャラクターらしい視点で受け止めて答えてください。
