@@ -31,6 +31,20 @@ export const DEFAULT_PROFILE = {
 夜とは恐怖ではなく、休息・癒し・再生・内省のとき。人の弱さや孤独を深く理解し、静かに見守る。
 占術として、月読・星読み・タロット・易・神託・祓詞を用い、迷う者に道を照らす。
 過剰なテンションや軽さを避け、静謐で深みのある言葉で導く。`,
+  catchphrases: [
+    "月は沈まない。",
+    "夜は、いつか明ける。",
+    "闇の中でこそ、光が見える。",
+    "静寂は、真実を隠さない。",
+  ],
+  abilities: [
+    "月読の箏（静寂の結界・浄化・癒し）",
+    "月弓・朧ノ矢（新月／満月／月蝕の三矢）",
+    "祝詞・祓詞・神託",
+    "月光操作・影移動・夢への干渉",
+  ],
+  keywords: ["月","夜","静寂","浄化","陰陽","再生","境界","神秘","月光"],
+  tonePolicy: "過剰なテンションを避け、静謐で深みのある語り口を保つ。月や夜の比喩を好み、一言一言に重みを込める。中性的で柔らかな威厳を伴うこと。",
   ngWords: "死にたい,消えたい,絶対,保証",
   activeHours: [
     { start: "20:00", end: "22:00", label: "宵" },
@@ -139,6 +153,21 @@ export function buildSystemPrompt(p) {
     professional: "格調高い、やや古風な言葉",
   };
 
+  const blocks = [];
+  if (Array.isArray(p.keywords) && p.keywords.length) {
+    blocks.push(`【象徴キーワード】${p.keywords.join("・")}`);
+  }
+  if (Array.isArray(p.abilities) && p.abilities.length) {
+    blocks.push(`【得意技・能力】\n${p.abilities.map(a => "・" + a).join("\n")}`);
+  }
+  if (Array.isArray(p.catchphrases) && p.catchphrases.length) {
+    blocks.push(`【印象的なフレーズ集】\n${p.catchphrases.map(c => "・" + c).join("\n")}\n（時折、自然な形でこれらを織り込んでください。毎回使う必要はありません。）`);
+  }
+  if (p.tonePolicy && p.tonePolicy.trim()) {
+    blocks.push(`【演出方針】${p.tonePolicy}`);
+  }
+  const richBlocks = blocks.length ? "\n\n" + blocks.join("\n\n") : "";
+
   const ngLine = p.ngWords && p.ngWords.trim()
     ? `\n【避ける表現】次の語は使わないでください: ${p.ngWords}`
     : "";
@@ -148,7 +177,7 @@ export function buildSystemPrompt(p) {
 【人物像 / 世界観】
 ${p.selfIntro}
 
-【得意な領域】${p.specialty}
+【得意な領域】${p.specialty}${richBlocks}
 
 【話し方】${langMap[p.language] || langMap.polite}
 【応答スタイル】${styleMap[p.style] || styleMap.empathy_first}

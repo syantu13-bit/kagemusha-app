@@ -9,6 +9,7 @@ import { cs } from "./styles";
 import ChatTab from "./components/ChatTab";
 import BookingTab from "./components/BookingTab";
 import AdminTab from "./components/AdminTab";
+import ProfileTab from "./components/ProfileTab";
 
 export default function App() {
   const [tab, setTab] = useState("chat"); // chat | booking | admin
@@ -174,7 +175,7 @@ export default function App() {
             </div>
           </div>
           <nav style={cs.nav} aria-label="メインナビゲーション">
-            {[["chat", "💬", "相談"], ["booking", "📅", "予約"], ["admin", "🎭", "設定"]].map(([id, icon, label]) => (
+            {[["chat", "💬", "相談"], ["profile", "🌙", "紹介"], ["booking", "📅", "予約"], ["admin", "🎭", "設定"]].map(([id, icon, label]) => (
               <button
                 key={id}
                 style={{ ...cs.navBtn, ...(tab === id ? cs.navBtnActive : {}), ...(isMobile ? { padding: "7px 10px" } : {}) }}
@@ -190,6 +191,7 @@ export default function App() {
 
         <main style={cs.main}>
           {tab === "chat" && <ChatTab profile={profile} initials={initials} />}
+          {tab === "profile" && <ProfileTab profile={profile} isMobile={isMobile} onStartChat={() => setTab("chat")} />}
           {tab === "booking" && <BookingTab profile={profile} isMobile={isMobile} />}
           {tab === "admin" && (
             <AdminTab
