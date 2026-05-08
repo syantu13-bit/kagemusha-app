@@ -7,7 +7,14 @@ import {
 import { Markdown } from "../markdown";
 import { ad, baseInput } from "../styles";
 
-const ADMIN_TABS = ["基本情報", "口調・スタイル", "対応時間", "プレビュー"];
+const ADMIN_TABS = ["基本情報", "口調・スタイル", "世界観・語彙", "対応時間", "プレビュー"];
+
+// 配列フィールド <-> テキストエリア（行区切り）の変換
+const linesToArr = (s) => s.split("\n").map(t => t.trim()).filter(Boolean);
+const arrToLines = (a) => Array.isArray(a) ? a.join("\n") : "";
+// カンマ区切り（タグ的）
+const tagsToArr = (s) => s.split(/[,、]/).map(t => t.trim()).filter(Boolean);
+const arrToTags = (a) => Array.isArray(a) ? a.join("、") : "";
 
 function Field({ label, children }) {
   return (
@@ -338,8 +345,68 @@ export default function AdminTab({
             </>
           )}
 
-          {/* 対応時間 */}
+          {/* 世界観・語彙 */}
           {tab === 2 && (
+            <>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.8, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", marginBottom: 4 }}>
+                キャラクターの世界観・口癖・能力を入力するとAIが拾ってくれます。<br />
+                プロフィール画面の表示にも反映されます。
+              </div>
+              <Field label="象徴キーワード（カンマ or 読点区切り）">
+                <Input
+                  value={arrToTags(profile.keywords)}
+                  onChange={v => upd("keywords", tagsToArr(v))}
+                  placeholder="例：月、夜、静寂、浄化"
+                />
+                {profile.keywords?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {profile.keywords.map((k, i) => (
+                      <span key={i} style={{
+                        background: "rgba(124,58,237,0.15)",
+                        border: "1px solid rgba(124,58,237,0.3)",
+                        color: "#c4b5fd",
+                        borderRadius: 999,
+                        padding: "2px 10px",
+                        fontSize: 11,
+                      }}>{k}</span>
+                    ))}
+                  </div>
+                )}
+              </Field>
+              <Field label="得意技・能力（1行ずつ）">
+                <textarea
+                  value={arrToLines(profile.abilities)}
+                  onChange={e => upd("abilities", linesToArr(e.target.value))}
+                  placeholder={"例：\n月読の箏（静寂の結界・浄化）\n月弓・朧ノ矢\n祝詞・祓詞・神託"}
+                  rows={4}
+                  style={{ ...baseInput, lineHeight: 1.7, fontFamily: "inherit", resize: "vertical" }}
+                />
+              </Field>
+              <Field label="印象的なフレーズ／口癖（1行ずつ）">
+                <textarea
+                  value={arrToLines(profile.catchphrases)}
+                  onChange={e => upd("catchphrases", linesToArr(e.target.value))}
+                  placeholder={"例：\n月は沈まない。\n夜は、いつか明ける。"}
+                  rows={4}
+                  style={{ ...baseInput, lineHeight: 1.7, fontFamily: "inherit", resize: "vertical" }}
+                />
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>
+                  AIが時折これらを自然に織り込みます。プロフィール画面では引用として表示。
+                </div>
+              </Field>
+              <Field label="演出方針（雰囲気の指示）">
+                <Textarea
+                  value={profile.tonePolicy || ""}
+                  onChange={v => upd("tonePolicy", v)}
+                  placeholder="例：過剰なテンションを避け、静謐で深みのある語り口を保つ。月や夜の比喩を好む。"
+                  rows={3}
+                />
+              </Field>
+            </>
+          )}
+
+          {/* 対応時間 */}
+          {tab === 3 && (
             <>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.8, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", marginBottom: 4 }}>
                 本人が直接対応する時間帯を設定します。それ以外はAI影武者が自動応答します。
@@ -374,7 +441,7 @@ export default function AdminTab({
           )}
 
           {/* プレビュー */}
-          {tab === 3 && (
+          {tab === 4 && (
             <>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.8, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
                 現在の設定でAI影武者に話しかけてテストできます。
