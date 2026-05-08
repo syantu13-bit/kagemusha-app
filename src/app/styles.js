@@ -48,6 +48,7 @@ export const ts = {
   textarea:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"11px 15px",color:"#f1f0ff",fontSize:14,resize:"none",fontFamily:"inherit",lineHeight:1.6},
   sendBtn:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",border:"none",borderRadius:12,padding:"11px 20px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 4px 14px rgba(124,58,237,0.3)",transition:"opacity 0.2s",whiteSpace:"nowrap"},
   footer:{padding:"8px 20px 14px",fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"},
+  cursor:{display:"inline-block",marginLeft:2,color:"#a78bfa",animation:"blink 1s step-end infinite",fontSize:13,lineHeight:1},
 };
 
 export const bk = {

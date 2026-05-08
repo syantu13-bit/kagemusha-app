@@ -85,9 +85,20 @@ export default function AdminTab({
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1500);
   }
+  function updMany(updates) {
+    setProfile({ ...profile, ...updates });
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
+  }
   function updHour(i, k, v) {
     const next = profile.activeHours.map((h, idx) => idx === i ? { ...h, [k]: v } : h);
     upd("activeHours", next);
+  }
+  function addHour() {
+    upd("activeHours", [...profile.activeHours, { start: "20:00", end: "22:00", label: "枠" + (profile.activeHours.length + 1) }]);
+  }
+  function removeHour(i) {
+    upd("activeHours", profile.activeHours.filter((_, idx) => idx !== i));
   }
 
   async function runPreview() {
@@ -98,8 +109,21 @@ export default function AdminTab({
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system: buildSystemPrompt(profile), messages: [{ role: "user", content: prev.msg }] }),
       });
-      const data = await res.json();
-      setPrev(p => ({ ...p, reply: data.content?.[0]?.text || data.error || "応答を取得できませんでした", loading: false }));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPrev(p => ({ ...p, reply: data.error || "応答を取得できませんでした", loading: false }));
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+        setPrev(p => ({ ...p, reply: text }));
+      }
+      setPrev(p => ({ ...p, loading: false }));
     } catch { setPrev(p => ({ ...p, reply: "エラーが発生しました", loading: false })); }
   }
 
@@ -247,6 +271,23 @@ export default function AdminTab({
           {/* 基本情報 */}
           {tab === 0 && (
             <>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!confirm("ツクヨミのデフォルト設定を読み込みますか？\n現在の設定は上書きされます。")) return;
+                    setProfile({ ...DEFAULT_PROFILE, id: profile.id });
+                    setSavedFlash(true);
+                    setTimeout(() => setSavedFlash(false), 1500);
+                  }}
+                  style={{
+                    background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)",
+                    color: "#c4b5fd", borderRadius: 8, padding: "5px 12px",
+                    fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                  }}>
+                  🌙 ツクヨミ設定を読み込む
+                </button>
+              </div>
               <Field label="表示名"><Input value={profile.name} onChange={v => upd("name", v)} placeholder="例：Kenji" /></Field>
               <Field label="タグライン"><Input value={profile.tagline} onChange={v => upd("tagline", v)} placeholder="例：人生相談のプロ" /></Field>
               <Field label="専門分野"><Input value={profile.specialty} onChange={v => upd("specialty", v)} placeholder="例：キャリア・人間関係" /></Field>
@@ -259,7 +300,7 @@ export default function AdminTab({
                       type="button" key={i} role="radio"
                       aria-checked={profile.avatarColor1 === c1}
                       aria-label={`カラー${i + 1}`}
-                      onClick={() => { upd("avatarColor1", c1); upd("avatarColor2", c2); }}
+                      onClick={() => updMany({ avatarColor1: c1, avatarColor2: c2 })}
                       style={{
                         width: 36, height: 36, borderRadius: "50%", cursor: "pointer", padding: 0,
                         background: `linear-gradient(135deg,${c1},${c2})`,
@@ -413,13 +454,25 @@ export default function AdminTab({
               </div>
               {profile.activeHours.map((h, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "12px 16px" }}>
-                  <span style={{ fontSize: 11, color: "#a78bfa", background: "rgba(124,58,237,0.15)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{h.label}</span>
                   <input type="time" aria-label={`${h.label}の開始時刻`} value={h.start} onChange={e => updHour(i, "start", e.target.value)} style={ad.timeInput} />
                   <span style={{ color: "rgba(255,255,255,0.3)" }}>〜</span>
                   <input type="time" aria-label={`${h.label}の終了時刻`} value={h.end} onChange={e => updHour(i, "end", e.target.value)} style={ad.timeInput} />
-                  <input aria-label="ラベル" value={h.label} onChange={e => updHour(i, "label", e.target.value)} placeholder="ラベル" style={{ ...ad.input, width: 80, flex: isMobile ? "1 1 100%" : "none" }} />
+                  <input aria-label="ラベル" value={h.label} onChange={e => updHour(i, "label", e.target.value)} placeholder="ラベル" style={{ ...ad.input, width: 70, flex: isMobile ? "1 1 60px" : "none" }} />
+                  <button
+                    type="button"
+                    onClick={() => removeHour(i)}
+                    aria-label={`${h.label}を削除`}
+                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5", borderRadius: 6, width: 28, height: 28, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    ×
+                  </button>
                 </div>
               ))}
+              <button
+                type="button"
+                onClick={addHour}
+                style={{ background: "rgba(124,58,237,0.1)", border: "1px dashed rgba(124,58,237,0.35)", color: "#c4b5fd", borderRadius: 10, padding: "8px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
+                + 時間帯を追加
+              </button>
               {/* 24時間バー */}
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>24時間表示</div>

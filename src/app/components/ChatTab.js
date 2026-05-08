@@ -39,7 +39,6 @@ export default function ChatTab({ profile, initials }) {
   const bottomRef = useRef(null);
   const abortRef = useRef(null);
 
-  // プロフィール切替時に履歴を再読込
   useEffect(() => {
     setHydrated(false);
     try {
@@ -47,7 +46,7 @@ export default function ChatTab({ profile, initials }) {
       if (s) {
         const parsed = JSON.parse(s);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+          setMessages(parsed.map(m => ({ ...m, streaming: false })));
         } else {
           setMessages([greetingMsg()]);
         }
@@ -63,7 +62,9 @@ export default function ChatTab({ profile, initials }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    try { localStorage.setItem(chatKey(profile.id), JSON.stringify(messages)); } catch {}
+    // ストリーミング中のメッセージは保存しない
+    const toSave = messages.map(m => ({ ...m, streaming: false }));
+    try { localStorage.setItem(chatKey(profile.id), JSON.stringify(toSave)); } catch {}
   }, [messages, hydrated, profile.id]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -99,6 +100,7 @@ export default function ChatTab({ profile, initials }) {
     setLoading(true);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -109,24 +111,73 @@ export default function ChatTab({ profile, initials }) {
         }),
         signal: ctrl.signal,
       });
-      const data = await res.json();
+
       if (!res.ok) {
-        setMessages(p => [...p, { role: "assistant", content: `応答エラー: ${data.error || "不明なエラー"}`, time: nowTime(), error: true }]);
+        let errMsg = "不明なエラー";
+        try { const data = await res.json(); errMsg = data.error || errMsg; } catch {}
+        setMessages(p => [...p, { role: "assistant", content: `応答エラー: ${errMsg}`, time: nowTime(), error: true }]);
         return;
       }
-      const textBlock = Array.isArray(data?.content) ? data.content.find(c => c?.type === "text") : null;
-      const reply = textBlock?.text;
-      if (reply) {
-        setMessages(p => [...p, { role: "assistant", content: reply, time: nowTime() }]);
+
+      // ストリーミングテキストを逐次読み込む
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let firstChunk = true;
+      const msgTime = nowTime();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+
+        if (firstChunk) {
+          firstChunk = false;
+          setMessages(p => [...p, { role: "assistant", content: accumulated, time: msgTime, streaming: true }]);
+        } else {
+          const text = accumulated;
+          setMessages(p => {
+            const prev = [...p];
+            prev[prev.length - 1] = { ...prev[prev.length - 1], content: text };
+            return prev;
+          });
+        }
+      }
+
+      if (!accumulated.trim()) {
+        const fallback = { role: "assistant", content: "応答が空でした。もう一度お試しください。", time: nowTime(), error: true };
+        if (firstChunk) {
+          setMessages(p => [...p, fallback]);
+        } else {
+          setMessages(p => { const a = [...p]; a[a.length - 1] = fallback; return a; });
+        }
       } else {
-        const debug = `応答が空でした（stop_reason: ${data?.stop_reason ?? "不明"}）`;
-        setMessages(p => [...p, { role: "assistant", content: debug, time: nowTime(), error: true }]);
+        setMessages(p => {
+          const a = [...p];
+          if (a[a.length - 1]?.streaming) a[a.length - 1] = { ...a[a.length - 1], streaming: false };
+          return a;
+        });
       }
     } catch (err) {
       if (err?.name === "AbortError") {
-        setMessages(p => [...p, { role: "assistant", content: "（送信を中断しました）", time: nowTime(), safety: true }]);
+        setMessages(p => {
+          const a = [...p];
+          const last = a[a.length - 1];
+          if (last?.streaming) {
+            a[a.length - 1] = { ...last, streaming: false, content: (last.content || "") + "\n…（中断されました）" };
+          } else {
+            a.push({ role: "assistant", content: "（送信を中断しました）", time: nowTime(), safety: true });
+          }
+          return a;
+        });
       } else {
-        setMessages(p => [...p, { role: "assistant", content: "接続が不安定です。もう一度お試しください。", time: nowTime(), error: true }]);
+        setMessages(p => {
+          const a = [...p];
+          const last = a[a.length - 1];
+          const errMsg = { role: "assistant", content: "接続が不安定です。もう一度お試しください。", time: nowTime(), error: true };
+          if (last?.streaming) { a[a.length - 1] = errMsg; } else { a.push(errMsg); }
+          return a;
+        });
       }
     } finally {
       setLoading(false);
@@ -137,6 +188,8 @@ export default function ChatTab({ profile, initials }) {
   function cancelSend() {
     abortRef.current?.abort();
   }
+
+  const isStreaming = messages.some(m => m.streaming);
 
   return (
     <div style={ts.wrap}>
@@ -213,7 +266,10 @@ export default function ChatTab({ profile, initials }) {
                     {q
                       ? highlightText(m.content, q)
                       : m.role === "assistant"
-                        ? <Markdown>{m.content}</Markdown>
+                        ? <>
+                            <Markdown>{m.content}</Markdown>
+                            {m.streaming && <span style={ts.cursor} aria-hidden="true">▋</span>}
+                          </>
                         : m.content.split("\n").map((l, j) => <span key={j}>{l}{j < m.content.split("\n").length - 1 && <br />}</span>)}
                   </div>
                   <div style={{ ...ts.time, textAlign: m.role === "user" ? "right" : "left" }}>{m.time}</div>
@@ -222,7 +278,8 @@ export default function ChatTab({ profile, initials }) {
             );
           });
         })()}
-        {loading && (
+        {/* ストリーミング開始前のみドットを表示 */}
+        {loading && !isStreaming && (
           <div style={{ ...ts.row }}>
             <div style={{ ...ts.msgAvatar, background: `linear-gradient(135deg,${profile.avatarColor1},${profile.avatarColor2})` }}>{initials}</div>
             <div style={{ ...ts.bubble, ...ts.bubbleAI, ...ts.typing }}>
@@ -266,6 +323,9 @@ export default function ChatTab({ profile, initials }) {
         )}
       </div>
       <div style={ts.footer}>Enter で送信 · Shift+Enter で改行</div>
+      <style>{`
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+      `}</style>
     </div>
   );
 }

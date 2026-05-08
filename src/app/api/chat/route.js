@@ -1,8 +1,6 @@
-// Google Gemini API を呼び出すチャット用エンドポイント。
-// 完全無料枠（gemini-2.5-flash）を使う。
-// クライアントが期待する Anthropic 形式
-//   { content: [{ type:"text", text:"..." }], stop_reason: "..." }
-// に整形して返す（クライアント側コードは無改修）。
+// Google Gemini API のストリーミングエンドポイントを呼び出す。
+// SSE (Server-Sent Events) を受け取り、テキストチャンクをそのまま流す。
+// クライアントは res.body を ReadableStream として読み込む。
 
 const MODEL = "gemini-2.5-flash";
 
@@ -29,13 +27,12 @@ export async function POST(req) {
     );
   }
 
-  // assistant -> model に変換し、Gemini の contents 形式へ
   const contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
 
   try {
     const res = await fetch(url, {
@@ -51,8 +48,8 @@ export async function POST(req) {
       }),
     });
 
-    const data = await res.json();
     if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
       console.error("[chat] gemini upstream error", res.status, data);
       return Response.json(
         { error: data?.error?.message || "Upstream API error", details: data },
@@ -60,20 +57,47 @@ export async function POST(req) {
       );
     }
 
-    const candidate = data?.candidates?.[0];
-    const text = candidate?.content?.parts?.find(p => typeof p?.text === "string")?.text;
+    // SSE を受け取り、テキストチャンクだけを抽出してそのまま流す
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split("\n\n");
+            buffer = events.pop() ?? "";
+            for (const event of events) {
+              for (const line of event.split("\n")) {
+                if (!line.startsWith("data: ")) continue;
+                const raw = line.slice(6).trim();
+                if (!raw || raw === "[DONE]") continue;
+                try {
+                  const parsed = JSON.parse(raw);
+                  const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                  if (text) controller.enqueue(encoder.encode(text));
+                } catch {}
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[chat] stream read error", err);
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
-    if (!text) {
-      console.warn("[chat] gemini empty content", {
-        finishReason: candidate?.finishReason,
-        safetyRatings: candidate?.safetyRatings,
-      });
-    }
-
-    // クライアントが期待する形式に整形
-    return Response.json({
-      content: text ? [{ type: "text", text }] : [],
-      stop_reason: candidate?.finishReason || "unknown",
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
     });
   } catch (err) {
     return Response.json(
